@@ -12,17 +12,17 @@ services:
         - broker
     ports:
       - "8001:8000"  # Expose container port 8000 to host port 8000  
-  api2:
+  order-service-api:
     build:
-      context: ./microservice_02
+      context: ./order_service
       dockerfile: Dockerfile.dev
     volumes:
-      - ./microservice_02:/code  # Sync local development directory with the container
+      - ./order_service:/code  # Sync local development directory with the container
     depends_on:
-        - postgres_db
+        - postgres_order_db
         - broker
     ports:
-      - "8002:8000"  # Expose container port 8000 to host port 8000  
+      - "8004:8004"  # Expose container port 8000 to host port 8000  
   product-service-api:
     build:
       context: ./product_service
@@ -34,6 +34,10 @@ services:
         - broker
     ports:
       - "8003:8003"  # Expose container port 8000 to host port 8000  
+
+
+  ###########################       DataBases       #####################################
+
   postgres_db:
     image: postgres:latest  # Use the official PostgreSQL image
     restart: always
@@ -46,6 +50,7 @@ services:
         - '5433:5432'
     volumes:
         - postgres_db:/var/lib/postgresql/datazz
+
   postgres_product_db:
     image: postgres:latest  # Use the official PostgreSQL image
     restart: always
@@ -58,6 +63,26 @@ services:
         - '5434:5432'
     volumes:
         - postgres_product_db:/var/lib/postgresql/datazz
+
+  postgres_order_db:
+    image: postgres:latest  # Use the official PostgreSQL image
+    restart: always
+    container_name: PostgresOrderCont
+    environment:
+        - POSTGRES_USER=ziakhan
+        - POSTGRES_PASSWORD=my_password
+        - POSTGRES_DB=mydatabase
+    ports:
+        - '5435:5432'
+    volumes:
+        - postgres_order_db:/var/lib/postgresql/datazz
+
+
+
+    ##########################     Broker      ################################   
+
+    
+     
   broker:
     image: apache/kafka:3.7.0
     hostname: broker
@@ -91,11 +116,15 @@ services:
       DYNAMIC_CONFIG_ENABLED: "true"
     depends_on:
       - broker
+
+  #########################      Volumes        ##################################    
 volumes:
   postgres_db:
     driver: local
   postgres_product_db:
     driver: local
+  postgres_order_db:
+    driver: local  
 networks:
   default:
     driver: bridge
