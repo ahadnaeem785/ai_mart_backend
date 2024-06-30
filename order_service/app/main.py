@@ -60,7 +60,7 @@ def create_db_and_tables()->None:
 # loop = asyncio.get_event_loop()
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables..")
+    print("Creating tables....")
     # task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, 'broker:19092'))
     create_db_and_tables()
     yield
@@ -87,12 +87,6 @@ def read_root():
 
 @app.post("/orders/", response_model=Order)
 def create_order(order:Order, session: Session = Depends(get_session)):
-    # order_data = Order(
-    #     user_id=order.user_id,
-    #     total_amount=order.total_amount,
-    #     status=order.status,
-    #     # items=[OrderItem(**item.dict()) for item in order.items]
-    # )
     return add_order(session, order)
 
 @app.get("/orders/{order_id}", response_model=Order)
@@ -107,15 +101,22 @@ def list_orders(user_id: int, session: Session = Depends(get_session)):
     return get_all_orders(session, user_id)
 
 @app.patch("/orders/{order_id}", response_model=UpdateOrder)
-def update_order_status(order_id: int,order:UpdateOrder, session: Session = Depends(get_session)):
-    order = update_order(session=session, order_id=order_id,to_update_order=order)
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return order
+def update_order_status(order_id: int,order:UpdateOrder, session: Annotated[Session, Depends(get_session)]):
+    try:
+        return update_order(session=session, order_id=order_id,to_update_order=order)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/orders/{order_id}")
-def delete_order(order_id: int, session: Session = Depends(get_session)):
-    return delete_order(session, order_id)
+def delete_order_by_id(order_id: int,session: Annotated[Session, Depends(get_session)]):
+    try:
+        return delete_order(session=session, order_id=order_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # @app.post("/order-items/", response_model=schemas.OrderItemRead)
 # def add_order_item(order_item: schemas.OrderItemCreate, session: Session = Depends(get_session)):

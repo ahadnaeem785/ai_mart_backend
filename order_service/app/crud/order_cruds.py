@@ -16,24 +16,31 @@ def get_all_orders(session: Session, user_id: int) -> list[Order]:
 
 def update_order(session: Session, order_id: int,to_update_order : UpdateOrder) -> Order:   # status: str
     # Step 1: Get the Product by ID
-    product = session.exec(select(Order).where(Order.id == order_id)).one_or_none()
-    if product is None:
+    order = session.exec(select(Order).where(Order.id == order_id)).one_or_none()
+    if order is None:
         raise HTTPException(status_code=404, detail="Product not found")
     # Step 2: Update the Product
     hero_data = to_update_order.model_dump(exclude_unset=True)
-    product.sqlmodel_update(hero_data)
-    session.add(product)
+    order.sqlmodel_update(hero_data)
+    session.add(order)
     session.commit()
-    return product
+    return order
 
 def delete_order(session: Session, order_id: int) -> None:
     order = session.get(Order, order_id)
-    if order:
-        session.delete(order)
-        session.commit()
-        return {"order deleted successfully"}
-    else:
-        raise Exception(f"Order with id {order_id} does not exist")    
+    if order is None: 
+        return HTTPException(status_code=404, detail="Product not found")
+    session.delete(order)
+    session.commit()
+    return {"message": "Product Deleted Successfully"}
+
+
+
+
+
+
+
+
 
 # def add_order_item(session: Session, order_item: OrderItem) -> OrderItem:
 #     session.add(order_item)
