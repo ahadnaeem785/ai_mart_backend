@@ -1,4 +1,5 @@
 # main.py
+from datetime import timedelta
 from contextlib import asynccontextmanager
 from typing import Union, Optional, Annotated
 from sqlmodel import Field, Session, SQLModel, select, Sequence
@@ -10,54 +11,14 @@ import json
 from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
-from app.models.user_model import User,UserUpdate
+from app.models.user_model import User,UserUpdate,Register_User,Token
 from app.crud.user_crud import add_new_user,get_user_by_id,get_all_users,delete_user_by_id,update_user_by_id
-
+from app.auth import get_user_from_db ,hash_password,authenticate_user,EXPIRY_TIME,create_access_token
+from fastapi.security import OAuth2PasswordRequestForm
 
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
 
-# async def consume_messages(topic, bootstrap_servers):
-#     # Create a consumer instance.
-#     consumer = AIOKafkaConsumer(
-#         topic,
-#         bootstrap_servers=bootstrap_servers,
-#         group_id="product_consumer_group",
-#         auto_offset_reset='earliest'
-#     )
-
-#     # Start the consumer.
-#     await consumer.start()
-#     try:
-#         # Continuously listen for messages.
-#         async for message in consumer:
-#             print("RAW")
-#             print(f"Received message on topic {message.topic}")
-
-#             product_data = json.loads(message.value.decode())
-#             print("TYPE", (type(product_data)))
-#             print(f"Product Data {product_data}")
-
-
-            
-#             with next(get_session()) as session:
-#                 print("SAVING DATA TO DATABSE")
-#                 db_insert_product = add_new_product(
-#                     product_data=Product(**product_data), session=session)
-#                 print("DB_INSERT_PRODUCT", db_insert_product)
-                
-#             # print(f"Received message: {message.value.decode()} on topic {message.topic}")
-#             # Here you can add code to process each message.
-#             # Example: parse the message, store it in a database, etc.
-#     finally:
-#         # Ensure to close the consumer when done.
-#         await consumer.stop()
-
-
-# # The first part of the function, before the yield, will
-# # be executed before the application starts.
-# # https://fastapi.tiangolo.com/advanced/events/#lifespan-function
-# # loop = asyncio.get_event_loop()
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
     print("Creating tables..")
@@ -83,10 +44,10 @@ def read_root():
     return {"User": "Service"}
 
 
-@app.post("/users/", response_model=User)
-def create_new_user(user_data: User, session: Annotated[Session, Depends(get_session)]):
-    new_user = add_new_user(user_data=user_data, session=session)
-    return new_user
+# @app.post("/users/", response_model=User)
+# def create_new_user(user_data: User, session: Annotated[Session, Depends(get_session)]):
+#     new_user = add_new_user(user_data=user_data, session=session)
+#     return new_user
 
 @app.get("/users/", response_model=list[User])
 def read_users(session: Annotated[Session, Depends(get_session)]):
@@ -116,3 +77,36 @@ def update_single_user(user_id: int, user: UserUpdate, session: Annotated[Sessio
         return update_user_by_id(user_id=user_id, to_update_user_data=user, session=session)
     except HTTPException as e:
         raise e
+
+
+#signup user if not already signed up
+@app.post("/register")
+async def regiser_user(new_user:Annotated[Register_User, Depends()],
+                        session:Annotated[Session, Depends(get_session)]):
+    db_user = get_user_from_db(session, new_user.username, new_user.email)
+    if db_user:
+        raise HTTPException(status_code=409, detail="User with these credentials already exists")
+    user = User(
+                username = new_user.username,
+                email = new_user.email,
+                password = hash_password(new_user.password))
+
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return {"message": f""" {user.username} successfully registered """}    
+
+
+
+# login user with username and password
+@app.post('/token')
+async def login(form_data:Annotated[OAuth2PasswordRequestForm, Depends()],
+                session:Annotated[Session, Depends(get_session)]):
+    user = authenticate_user (form_data.username, form_data.password, session)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    expire_time = timedelta(minutes=EXPIRY_TIME)
+    access_token = create_access_token({"sub":form_data.username}, expire_time)
+    
+    return Token(access_token=access_token, token_type="bearer")

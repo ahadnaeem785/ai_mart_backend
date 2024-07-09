@@ -11,55 +11,22 @@ import json
 from app import settings
 from app.db_engine import engine
 from app.models.inventory_model import InventoryItem
-from app.crud.inventory_crud import add_new_inventory_item, delete_inventory_item_by_id, get_all_inventory_items, get_inventory_item_by_id
+from app.crud.inventory_crud import delete_inventory_item_by_id, get_all_inventory_items, get_inventory_item_by_id
 from app.deps import get_session, get_kafka_producer
+from app.consumer.add_stock_consumer import consume_messages
 
 
 def create_db_and_tables() -> None:
     SQLModel.metadata.create_all(engine)
 
 
-# async def consume_messages(topic, bootstrap_servers):
-#     # Create a consumer instance.
-#     consumer = AIOKafkaConsumer(
-#         topic,
-#         bootstrap_servers=bootstrap_servers,
-#         group_id="my-inventory-consumer-group",
-#         # auto_offset_reset="earliest",
-#     )
-
-#     # Start the consumer.
-#     await consumer.start()
-#     try:
-#         # Continuously listen for messages.
-#         async for message in consumer:
-#             print("RAW")
-#             print(f"Received message on topic {message.topic}")
-
-#             product_data = json.loads(message.value.decode())
-#             print("TYPE", (type(product_data)))
-#             print(f"Product Data {product_data}")
-
-#             with next(get_session()) as session:
-#                 print("SAVING DATA TO DATABSE")
-#                 db_insert_product = add_new_product(
-#                     product_data=Product(**product_data), session=session)
-#                 print("DB_INSERT_PRODUCT", db_insert_product)
-
-#             # Here you can add code to process each message.
-#             # Example: parse the message, store it in a database, etc.
-#     finally:
-#         # Ensure to close the consumer when done.
-#         await consumer.stop()
-
 
 # The first part of the function, before the yield, will
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    print("Creating table!!")
-
-    # task = asyncio.create_task(consume_messages(
-    #     settings.KAFKA_PRODUCT_TOPIC, 'broker:19092'))
+    print("Creating table!!!!!!!!!!")
+    task = asyncio.create_task(consume_messages("inventory-add-stock-response", 'broker:19092'))
+    print("refresh")
     create_db_and_tables()
     yield
 
@@ -80,13 +47,13 @@ def read_root():
 async def create_new_inventory_item(item: InventoryItem, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
     """ Create a new inventory item and send it to Kafka"""
 
-    # item_dict = {field: getattr(item, field) for field in item.dict()}
-    # item_json = json.dumps(item_dict).encode("utf-8")
-    # print("item_JSON:", item_json)
-    # # Produce message
-    # await producer.send_and_wait("AddStock", item_json)
-    new_item = add_new_inventory_item(item, session)
-    return new_item
+    item_dict = {field: getattr(item, field) for field in item.dict()}
+    item_json = json.dumps(item_dict).encode("utf-8")
+    print("item_JSON:", item_json)
+    # Produce message
+    await producer.send_and_wait("AddStock", item_json)
+    # new_item = add_new_inventory_item(item, session)
+    return item
 
 
 @app.get("/manage-inventory/all", response_model=list[InventoryItem])
