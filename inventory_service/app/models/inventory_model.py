@@ -4,10 +4,13 @@ from sqlmodel import SQLModel, Field, Relationship
 class InventoryItem(SQLModel, table=True):
     id: int  = Field(default=None, primary_key=True)
     product_id: int
-    variant_id: int | None = None
     quantity: int
-    status: str 
+    name : str
+    # variant_id: int | None = None
+    
+    # status: str 
 
 
-# class InventoryItemUpdate(SQLModel):
-#     pass
+class InventoryItemUpdate(SQLModel):
+    quantity: int | None = None
+    name : str | None = None

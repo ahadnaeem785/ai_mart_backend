@@ -1,7 +1,17 @@
 from sqlmodel import Session, select # type: ignore
 from app.models.order_model import Order,UpdateOrder
 from fastapi import HTTPException # type: ignore
-def add_order(session: Session, order: Order) -> Order:
+
+
+
+# def add_order(session: Session, order: Order) -> Order:
+#     session.add(order)
+#     session.commit()
+#     session.refresh(order)
+#     return order
+
+def create_order(session: Session, order: Order, product_price: float):
+    order.total_price = order.quantity * product_price  # Calculate total price
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -26,6 +36,15 @@ def update_order(session: Session, order_id: int,to_update_order : UpdateOrder) 
     session.commit()
     return order
 
+def update_order_status(session: Session, order_id: int, status: str):
+    order = session.get(Order, order_id)
+    if order:
+        order.status = status
+        session.add(order)
+        session.commit()
+        session.refresh(order)
+    return order
+
 def delete_order(session: Session, order_id: int) -> None:
     order = session.get(Order, order_id)
     if order is None: 
@@ -34,30 +53,3 @@ def delete_order(session: Session, order_id: int) -> None:
     session.commit()
     return {"message": "Product Deleted Successfully"}
 
-
-
-
-
-
-
-
-
-# def add_order_item(session: Session, order_item: OrderItem) -> OrderItem:
-#     session.add(order_item)
-#     session.commit()
-#     session.refresh(order_item)
-#     return order_item
-
-# def update_order_item(session: Session, order_item_id: int, quantity: int) -> OrderItem:
-#     order_item = session.get(OrderItem, order_item_id)
-#     if order_item:
-#         order_item.quantity = quantity
-#         session.commit()
-#         session.refresh(order_item)
-#     return order_item
-
-# def remove_order_item(session: Session, order_item_id: int) -> None:
-#     order_item = session.get(OrderItem, order_item_id)
-#     if order_item:
-#         session.delete(order_item)
-#         session.commit()

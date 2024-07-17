@@ -4,12 +4,13 @@ from app.deps import get_session
 from app.crud.inventory_crud import add_new_inventory_item
 from app.models.inventory_model import InventoryItem
 
-async def consume_messages(topic, bootstrap_servers):
+
+async def consume_order_messages(topic, bootstrap_servers):
     # Create a consumer instance.
     consumer = AIOKafkaConsumer(
         topic,
         bootstrap_servers=bootstrap_servers,
-        group_id="add-stock-consumer-group",
+        group_id="update-inventory-stock",
         auto_offset_reset="earliest",
     )
 
@@ -18,21 +19,19 @@ async def consume_messages(topic, bootstrap_servers):
     try:
         # Continuously listen for messages.
         async for message in consumer:
-            print("RAW ADD STOCK CONSUMER MESSAGE")
+            print("RAW UPDATE STOCK CONSUMER MESSAGE")
             print(f"Received message on topic {message.topic}")
 
-            inventory_data = json.loads(message.value.decode())
-            print("TYPE", (type(inventory_data)))
-            print(f"Inventory Data {inventory_data}")
+            order_data = json.loads(message.value.decode())
+            print("TYPE", (type(order_data)))
+            print(f"Order Data {order_data}")
 
             with next(get_session()) as session:
                 print("SAVING DATA TO DATABSE")
-                # inventory_item_data: InventoryItem
-                db_insert_product = add_new_inventory_item(
-                    inventory_item_data=InventoryItem(**inventory_data), 
-                    session=session)
+                updated_stock = update_inventory_stock(session, order_data["product_id"], -order_data["quantity"])
+                print(f"Received order placed event: {order_data}")
                 
-                print("DB_INSERT_STOCK", db_insert_product)
+                print("DB_INSERT_STOCK", updated_stock)
 
             # Here you can add code to process each message.
             # Example: parse the message, store it in a database, etc.

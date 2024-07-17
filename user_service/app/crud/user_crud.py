@@ -2,6 +2,7 @@ from app.models.user_model import User
 from sqlmodel import Session , select
 from fastapi import HTTPException
 from app.models.user_model import UserUpdate
+from app.auth import hash_password
 
 
 # Add a New User to the Database
@@ -37,10 +38,14 @@ def update_user_by_id(user_id: int, to_update_user_data: UserUpdate, session: Se
     user = session.exec(select(User).where(User.id == user_id)).one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    user_data = to_update_user_data.model_dump(exclude_unset=True)
-    user.sqlmodel_update(user_data)
+    user_data = to_update_user_data.dict(exclude_unset=True)
+    if "password" in user_data:
+        user_data["password"] = hash_password(user_data["password"])
+    for key, value in user_data.items():
+        setattr(user, key, value)
     session.add(user)
     session.commit()
+    session.refresh(user)
     return user
 
     

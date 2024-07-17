@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from typing import Annotated
 from app.deps import get_session
 from fastapi import Depends, HTTPException, status
-from app.models.user_model import User
+from app.models.user_model import User,TokenData
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from datetime import datetime, timezone, timedelta
@@ -16,7 +16,7 @@ EXPIRY_TIME = 30
 
 oauth_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
-pwd_context = CryptContext(schemes="bcrypt")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password):
@@ -51,7 +51,7 @@ def authenticate_user(username,password,session: Annotated[Session, Depends(get_
     print(f""" authenticate {db_user} """)
     if not db_user:
         return False
-    if not verify_password(password, db_user.password):
+    if not verify_password(password,db_user.password):
         return False
     return db_user   
 
@@ -67,5 +67,29 @@ def create_access_token(data: dict, expiry_time: timedelta | None):
     encoded_jwt = jwt.encode(
         data_to_encode, SECRET_KEY, algorithm=ALGORITHYM, )
     return encoded_jwt    
+
+
+def current_user(token: Annotated[str, Depends(oauth_scheme)],
+                 session: Annotated[Session, Depends(get_session)]):
+    credential_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid token, Please login again",
+        headers={"www-Authenticate": "Bearer"}
+    )
+    print("Token",token)
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHYM)
+        username: str | None = payload.get("sub")
+
+        if username is None:
+            raise credential_exception
+        token_data = TokenData(username=username)
+
+    except JWTError:
+        raise credential_exception
+    user = get_user_from_db(session, username=token_data.username)
+    if not user:
+        raise credential_exception
+    return user
 
 

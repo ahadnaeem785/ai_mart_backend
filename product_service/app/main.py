@@ -13,7 +13,7 @@ from app.deps import get_kafka_producer,get_session
 from app.models.product_model import Product,ProductUpdate
 from app.crud.product_crud import get_all_products,delete_product_by_id,update_product_by_id,get_product_by_id
 from app.consumer.product_consumer import consume_messages
-from app.consumer.inventory_consumer import consume_inventory_messages
+# from app.consumer.inventory_consumer import consume_inventory_messages
 
 
 def create_db_and_tables()->None:
@@ -32,10 +32,10 @@ async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
 
 
 
-    asyncio.create_task(consume_inventory_messages(
-        "AddStock",
-        'broker:19092'
-    ))
+    # asyncio.create_task(consume_inventory_messages(
+    #     "AddStock",
+    #     'broker:19092'
+    # ))
     create_db_and_tables()
     yield
 
@@ -94,7 +94,7 @@ def delete_products(product_id:int , session: Annotated[Session, Depends(get_ses
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/products/{product_id}", response_model=ProductUpdate)
+@app.patch("/products/{product_id}", response_model=Product)
 def update_single_product(product_id: int, product: ProductUpdate, session: Annotated[Session, Depends(get_session)]):
     """ Update a single product by ID"""
     try:

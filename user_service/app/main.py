@@ -11,9 +11,9 @@ import json
 from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
-from app.models.user_model import User,UserUpdate,Register_User,Token
+from app.models.user_model import User,UserUpdate,Register_User,Token,TokenData
 from app.crud.user_crud import add_new_user,get_user_by_id,get_all_users,delete_user_by_id,update_user_by_id
-from app.auth import get_user_from_db ,hash_password,authenticate_user,EXPIRY_TIME,create_access_token
+from app.auth import get_user_from_db ,hash_password,authenticate_user,EXPIRY_TIME,create_access_token,current_user
 from fastapi.security import OAuth2PasswordRequestForm
 
 def create_db_and_tables()->None:
@@ -82,7 +82,8 @@ def update_single_user(user_id: int, user: UserUpdate, session: Annotated[Sessio
 #signup user if not already signed up
 @app.post("/register")
 async def regiser_user(new_user:Annotated[Register_User, Depends()],
-                        session:Annotated[Session, Depends(get_session)]):
+                        session:Annotated[Session, Depends(get_session)],
+                        producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
     db_user = get_user_from_db(session, new_user.username, new_user.email)
     if db_user:
         raise HTTPException(status_code=409, detail="User with these credentials already exists")
@@ -94,6 +95,13 @@ async def regiser_user(new_user:Annotated[Register_User, Depends()],
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    #send the registered user into kafka topic 
+    user_dict = {field: getattr(user, field) for field in user.dict()}
+    user_json = json.dumps(user_dict).encode("utf-8")
+    print("user_JSON:", user_json)
+    await producer.send_and_wait("Add_User", user_json)
+    
     return {"message": f""" {user.username} successfully registered """}    
 
 
@@ -110,3 +118,9 @@ async def login(form_data:Annotated[OAuth2PasswordRequestForm, Depends()],
     access_token = create_access_token({"sub":form_data.username}, expire_time)
     
     return Token(access_token=access_token, token_type="bearer")
+
+
+
+@app.get("/user_profile")
+def read_user(current_user:Annotated[User, Depends(current_user)]):
+    return current_user

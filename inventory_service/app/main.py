@@ -10,10 +10,10 @@ import json
 
 from app import settings
 from app.db_engine import engine
-from app.models.inventory_model import InventoryItem
-from app.crud.inventory_crud import delete_inventory_item_by_id, get_all_inventory_items, get_inventory_item_by_id
+from app.models.inventory_model import InventoryItem,InventoryItemUpdate
+from app.crud.inventory_crud import delete_inventory_item_by_id, get_all_inventory_items, get_inventory_item_by_id,update_inventory_by_id
 from app.deps import get_session, get_kafka_producer
-from app.consumer.add_stock_consumer import consume_messages
+from app.consumer.add_inventory import consume_messages
 
 
 def create_db_and_tables() -> None:
@@ -24,8 +24,14 @@ def create_db_and_tables() -> None:
 # The first part of the function, before the yield, will
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    print("Creating table!!!!!!!!!!")
-    task = asyncio.create_task(consume_messages("inventory-add-stock-response", 'broker:19092'))
+    print("Creating table!!!!!!!!!")
+    task = asyncio.create_task(consume_messages("product-events", 'broker:19092'))
+    
+    asyncio.create_task(consume_order_messages(
+    "order_placed",
+    'broker:19092'
+    ))
+
     print("refresh")
     create_db_and_tables()
     yield
@@ -47,11 +53,11 @@ def read_root():
 async def create_new_inventory_item(item: InventoryItem, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
     """ Create a new inventory item and send it to Kafka"""
 
-    item_dict = {field: getattr(item, field) for field in item.dict()}
-    item_json = json.dumps(item_dict).encode("utf-8")
-    print("item_JSON:", item_json)
+    # item_dict = {field: getattr(item, field) for field in item.dict()}
+    # item_json = json.dumps(item_dict).encode("utf-8")
+    # print("item_JSON:", item_json)
     # Produce message
-    await producer.send_and_wait("AddStock", item_json)
+    # await producer.send_and_wait("AddStock", item_json)
     # new_item = add_new_inventory_item(item, session)
     return item
 
@@ -84,12 +90,12 @@ def delete_single_inventory_item(item_id: int, session: Annotated[Session, Depen
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# @app.patch("/manage-inventory/{item_id}", response_model=InventoryItem)
-# def update_single_inventory_item(item_id: int, item: InventoryItemUpdate, session: Annotated[Session, Depends(get_session)]):
-#     """ Update a single inventory item by ID"""
-#     try:
-#         return update_inventory_item_by_id(item_id=item_id, to_update_item_data=item, session=session)
-#     except HTTPException as e:
-#         raise e
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
+@app.patch("/manage-inventory/{product_id}", response_model=InventoryItemUpdate)
+def update_single_inventory_item(product_id: int, item: InventoryItemUpdate, session: Annotated[Session, Depends(get_session)]):
+    """ Update a single inventory item by ID"""
+    try:
+        return update_inventory_by_id(product_id=product_id, update_product_inventory=item, session=session)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
