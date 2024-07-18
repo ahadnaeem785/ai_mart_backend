@@ -4,16 +4,16 @@ from typing import Union, Optional, Annotated
 from sqlmodel import Field, Session, SQLModel, select, Sequence # type: ignore
 from fastapi import FastAPI, Depends,HTTPException # type: ignore
 from typing import AsyncGenerator
-# from aiokafka import AIOKafkaConsumer,AIOKafkaProducer
+from aiokafka import AIOKafkaProducer #type:ignore
 import asyncio
 import json
 from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
 from app.models.order_model import Order,UpdateOrder
-from app.crud.order_cruds import add_order,get_all_orders,get_order,delete_order,update_order
+from app.crud.order_cruds import place_order,get_all_orders,get_order,delete_order,update_order,send_order_to_kafka,get_product_price
 import requests
-
+from app.consumer.order_check_reponse import consume_order_response_messages
 
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
@@ -21,13 +21,14 @@ def create_db_and_tables()->None:
 #
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables....")
-    # task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, 'broker:19092'))
+    print("Creating tables.....")
+    #listens the order-check-response topic
+    task = asyncio.create_task(consume_order_response_messages("order-check-response", 'broker:19092'))
     create_db_and_tables()
     yield 
 
 
-app = FastAPI(lifespan=lifespan, title="Hello World API with DB", 
+app = FastAPI(lifespan=lifespan, title="Order API with DB", 
     version="0.0.1",
     # servers=[
     #     {
@@ -37,12 +38,6 @@ app = FastAPI(lifespan=lifespan, title="Hello World API with DB",
     #     ]
         )
 
-def get_product_price(product_id: int) -> float:
-    # Fetch product price from Product Service
-    response = requests.get(f'http://product-service-api:8003/products/{product_id}')
-    response_data = response.json()
-    return response_data['price']
-
 # Root endpoint
 @app.get("/")
 def read_root():
@@ -51,10 +46,12 @@ def read_root():
 
 @app.post("/orders/", response_model=Order)
 async def create_order(order:Order, session: Annotated[Session, Depends(get_session)],producer:Annotated[AIOKafkaProducer,Depends(get_kafka_producer)]):
+    #calculate the total price and send the order to kafka topic
     product_price = get_product_price(order.product_id)
-    new_order = add_order(session, order)
+    print("Product Price:", product_price)
+    new_order = send_order_to_kafka(session, order,product_price)
 
-    order_dict = {field: getattr(order, field) for field in order.dict()}
+    order_dict = {field: getattr(order, field) for field in new_order.dict()}
     order_json = json.dumps(order_dict).encode("utf-8")
     print("orderJSON:", order_json)
     # Produce message
@@ -98,3 +95,4 @@ def update_order(order_id: int, status: str, session: Annotated[Session, Depends
     return order        
 
 
+# http://localhost:8003/products/2

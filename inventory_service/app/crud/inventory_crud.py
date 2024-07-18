@@ -52,6 +52,8 @@ def update_inventory_by_id(product_id: int, update_product_inventory:InventoryIt
 def update_inventory_stock(session: Session, product_id: int, quantity_change: int):
     inventory_item = session.exec(select(InventoryItem).where(InventoryItem.product_id == product_id)).one_or_none()
     if inventory_item:
+        if inventory_item.quantity + quantity_change < 0:
+            raise HTTPException(status_code=400, detail="Insufficient stock")
         inventory_item.quantity += quantity_change
         session.add(inventory_item)
         session.commit()

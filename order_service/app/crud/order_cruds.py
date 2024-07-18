@@ -1,16 +1,15 @@
 from sqlmodel import Session, select # type: ignore
 from app.models.order_model import Order,UpdateOrder
 from fastapi import HTTPException # type: ignore
+import requests
 
 
 
-# def add_order(session: Session, order: Order) -> Order:
-#     session.add(order)
-#     session.commit()
-#     session.refresh(order)
-#     return order
+def send_order_to_kafka(session: Session, order: Order, product_price: float):
+    order.total_price = order.quantity * product_price  # Calculate total price
+    return order
 
-def create_order(session: Session, order: Order, product_price: float):
+def place_order(session: Session, order: Order, product_price: float):
     order.total_price = order.quantity * product_price  # Calculate total price
     session.add(order)
     session.commit()
@@ -52,4 +51,12 @@ def delete_order(session: Session, order_id: int) -> None:
     session.delete(order)
     session.commit()
     return {"message": "Product Deleted Successfully"}
+
+
+
+def get_product_price(product_id: int) -> float:
+    # Fetch product price from Product Service
+    response = requests.get(f'http://product-service-api:8003/products/{product_id}')
+    response_data = response.json()
+    return response_data['price']
 

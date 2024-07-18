@@ -4,6 +4,8 @@ from app.deps import get_session
 from app.crud.inventory_crud import add_new_inventory_item
 from app.models.inventory_model import InventoryItem
 
+#this is the consumer of topic {product-events} which consumes the product which is going to be add 
+
 
 async def consume_messages(topic, bootstrap_servers):
     # Create a consumer instance.
