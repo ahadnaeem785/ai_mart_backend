@@ -14,6 +14,7 @@ from app.models.order_model import Order,OrderUpdate,OrderBase,OrderCreate,Order
 from app.crud.order_cruds import place_order,get_all_orders,get_order,delete_order,update_order,send_order_to_kafka,get_product_price,update_order_status
 import requests
 from app.consumer.order_check_reponse import consume_order_response_messages
+from app.consumer.order_status_update import consume_payment_response_message
 from app.shared_auth import get_current_user,get_login_for_access_token
 
 GetCurrentUserDep = Annotated[ Any, Depends(get_current_user)]
@@ -26,9 +27,10 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables..")
+    print("Creating tables.......")
     #listens the order-check-response topic
     task = asyncio.create_task(consume_order_response_messages("order-check-response", 'broker:19092'))
+    asyncio.create_task(consume_payment_response_message("payment_succeeded", 'broker:19092'))
     create_db_and_tables()
     yield 
 

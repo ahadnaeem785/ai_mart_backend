@@ -14,7 +14,8 @@ from app.models.inventory_model import InventoryItem,InventoryItemUpdate
 from app.crud.inventory_crud import delete_inventory_item_by_id, get_all_inventory_items, get_inventory_item_by_id,update_inventory_by_id
 from app.deps import get_session, get_kafka_producer
 from app.consumer.add_inventory import consume_messages
-from app.consumer.update_stock import consume_order_messages
+from app.consumer.check_stock import consume_order_messages
+from app.consumer.update_stock import consume_order_paid_messages
 
 
 def create_db_and_tables() -> None:
@@ -25,11 +26,16 @@ def create_db_and_tables() -> None:
 # The first part of the function, before the yield, will
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    print("Creating table!!!!!!!!!")
+    print("Creating table!!!!!")
     task = asyncio.create_task(consume_messages("product-events", 'broker:19092'))
     
     asyncio.create_task(consume_order_messages(
     "order_placed",
+    'broker:19092'
+    ))
+
+    asyncio.create_task(consume_order_paid_messages(
+    "order_paid",
     'broker:19092'
     ))
 

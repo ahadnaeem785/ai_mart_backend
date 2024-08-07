@@ -12,7 +12,7 @@ class OrderBase(SQLModel):
     user_id: int
     quantity: int
     total_price: float
-    status: str
+    status: str = Field(default="Unpaid")
 
 class Order(OrderBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

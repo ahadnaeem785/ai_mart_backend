@@ -48,15 +48,32 @@ def update_inventory_by_id(product_id: int, update_product_inventory:InventoryIt
     return inventory
 
 
-#update inventory stock
-def update_inventory_stock(session: Session, product_id: int, quantity_change: int):
-    inventory_item = session.exec(select(InventoryItem).where(InventoryItem.product_id == product_id)).one_or_none()
-    if inventory_item:
-        if inventory_item.quantity + quantity_change < 0:
-            raise HTTPException(status_code=400, detail="Insufficient stock")
-        inventory_item.quantity += quantity_change
-        session.add(inventory_item)
-        session.commit()
-        return inventory_item
-    else:
-        raise HTTPException(status_code=404, detail="Product not found")    
+# #update inventory stock
+# def update_inventory_stock(session: Session, product_id: int, quantity_change: int):
+#     inventory_item = session.exec(select(InventoryItem).where(InventoryItem.product_id == product_id)).one_or_none()
+#     if inventory_item:
+#         if inventory_item.quantity + quantity_change < 0:
+#             raise HTTPException(status_code=400, detail="Insufficient stock")
+#         inventory_item.quantity += quantity_change
+#         session.add(inventory_item)
+#         session.commit()
+#         return inventory_item
+#     else:
+#         raise HTTPException(status_code=404, detail="Product not found")    
+
+
+
+
+
+# #update inventory stock when payment is succeeded
+# def update_stock(order_data):
+#     with Session(engine) as session:
+#         inventory = session.exec(select(Inventory).where(Inventory.product_id == order_data["product_id"])).one_or_none()
+#         if inventory:
+#             inventory.quantity -= order_data["quantity"]
+#             session.add(inventory)
+#             session.commit()
+#             session.refresh(inventory)
+#             print(f"Updated inventory for product_id {order_data['product_id']}: new stock is {inventory.stock}")
+#         else:
+#             print(f"No inventory found for product_id {order_data['product_id']}")

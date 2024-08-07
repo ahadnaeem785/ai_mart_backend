@@ -26,7 +26,7 @@ def create_db_and_tables()->None:
 # loop = asyncio.get_event_loop()
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables.........")
+    print("Creating tables.....")
     task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, 'broker:19092'))
 
     # asyncio.create_task(consume_inventory_messages(

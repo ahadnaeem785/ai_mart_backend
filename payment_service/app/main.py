@@ -7,60 +7,28 @@ from typing import AsyncGenerator
 from aiokafka import AIOKafkaConsumer,AIOKafkaProducer
 import asyncio
 import json
+from typing import Any,Annotated
 from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
-from app.models.payment_model import Payment,PaymentUpdate
-from app.crud.payment_crud import add_new_payment,delete_payment_by_id,get_all_payments,get_payment_by_id,update_payment_by_id
+from app.models.payment_model import Payment,PaymentCreate,PaymentUpdate
+from app.crud.payment_crud import create_payment,get_payment,update_payment_status,update_payment_status,get_payment_intent_status
+import stripe
+from app.shared_auth import get_current_user,get_login_for_access_token
 
+GetCurrentUserDep = Annotated[ Any, Depends(get_current_user)]
+LoginForAccessTokenDep = Annotated[dict, Depends(get_login_for_access_token)]
+
+
+stripe.api_key = "sk_test_51Pgis3RoRfMmPaxp3mtohBmnPfe3TdB1ohkZToTOVYdACkxIB4BSaiG00HtbUQb0APCN2dhkKceUF2chYKFohPTA000cibX9gH"
 
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
 
-# async def consume_messages(topic, bootstrap_servers):
-#     # Create a consumer instance.
-#     consumer = AIOKafkaConsumer(
-#         topic,
-#         bootstrap_servers=bootstrap_servers,
-#         group_id="product_consumer_group",
-#         auto_offset_reset='earliest'
-#     )
 
-#     # Start the consumer.
-#     await consumer.start()
-#     try:
-#         # Continuously listen for messages.
-#         async for message in consumer:
-#             print("RAW")
-#             print(f"Received message on topic {message.topic}")
-
-#             product_data = json.loads(message.value.decode())
-#             print("TYPE", (type(product_data)))
-#             print(f"Product Data {product_data}")
-
-
-            
-#             with next(get_session()) as session:
-#                 print("SAVING DATA TO DATABSE")
-#                 db_insert_product = add_new_product(
-#                     product_data=Product(**product_data), session=session)
-#                 print("DB_INSERT_PRODUCT", db_insert_product)
-                
-#             # print(f"Received message: {message.value.decode()} on topic {message.topic}")
-#             # Here you can add code to process each message.
-#             # Example: parse the message, store it in a database, etc.
-#     finally:
-#         # Ensure to close the consumer when done.
-#         await consumer.stop()
-
-
-# # The first part of the function, before the yield, will
-# # be executed before the application starts.
-# # https://fastapi.tiangolo.com/advanced/events/#lifespan-function
-# # loop = asyncio.get_event_loop()
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables..")
+    print("Creating tables..>>>>>>.")
     # task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, 'broker:19092'))
     create_db_and_tables()
     yield
@@ -80,49 +48,65 @@ app = FastAPI(lifespan=lifespan, title="Hello World API with DB",
 
 @app.get("/")
 def read_root():
-    return {"Payment": "Service"}
+    return {"Payment": "Services"}
 
+@app.post("/auth/login")
+def login(token:LoginForAccessTokenDep):
+    return token
 
-
-@app.post("/payments/", response_model=Payment)
-def create_new_payment(payment: Payment, session: Annotated[Session, Depends(get_session)]):
-    """Create a new payment"""
-    payment_data = add_new_payment(payment=payment, session=session)
-    return payment_data
-
-
-@app.get("/payments/", response_model=list[Payment])
-def read_payments(session: Annotated[Session, Depends(get_session)]):
-    """Get all payments"""
-    return get_all_payments(session)
-
+@app.post("/payments/")
+async def create_payment_endpoint(payment: PaymentCreate, session: Session = Depends(get_session), current_user: Any = Depends(get_current_user)):
+    pay_data,checkout_url = create_payment(session=session, payment_data=payment, user_id=current_user['id'])
+    # return checkout_url
+    if checkout_url:
+        return {"Payment":pay_data,"checkout_url": checkout_url}
+    return {"payment": pay_data}
 
 @app.get("/payments/{payment_id}", response_model=Payment)
-def read_single_payment(payment_id: int, session: Annotated[Session, Depends(get_session)]):
-    """Read a single payment by ID"""
-    try:
-        return get_payment_by_id(payment_id=payment_id, session=session)
-    except HTTPException as e:
-        raise e
+def read_payment(payment_id: int, session: Session = Depends(get_session), current_user: Any = Depends(get_current_user)):
+    return get_payment(session, payment_id, current_user["id"])
+
+@app.patch("/payments/{payment_id}", response_model=Payment)
+def update_payment(payment_id: int, payment_update: PaymentUpdate, session: Session = Depends(get_session),current_user: Any = Depends(get_current_user)):
+    payment = get_payment(session, payment_id, current_user["id"])
+    updated_payment = update_payment_status(session, payment_id, payment_update.status)
+    return updated_payment
 
 
-@app.delete("/payments/{payment_id}")
-def delete_payment(payment_id: int, session: Annotated[Session, Depends(get_session)]):
-    """Delete a single payment by ID"""
+   
+@app.get("/stripe-callback/payment-success/")
+async def payment_success(session_id: str, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
     try:
-        return delete_payment_by_id(payment_id=payment_id, session=session)
+        payment_status, order_id = get_payment_intent_status(session_id)
+        if payment_status == "succeeded":
+            payment = update_payment_status(session, order_id=order_id, status="completed")
+            if payment:
+                event = {
+                    "order_id": payment.order_id,
+                    "status": "Paid",
+                    "user_id": payment.user_id,
+                    "amount": payment.amount,
+                }
+                await producer.send_and_wait("payment_succeeded", json.dumps(event).encode('utf-8'))
+
+            return {"message": "Payment succeeded", "order_id": payment.order_id}
+        else:
+            payment = update_payment_status(session, order_id=order_id, status="failed")
+            return {"message": "Payment not completed", "payment_status": payment_status, "order_id": payment.order_id}
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"{e}")
 
-
-@app.patch("/payments/{payment_id}", response_model=PaymentUpdate)
-def update_payment(payment_id: int, payment: PaymentUpdate, session: Annotated[Session, Depends(get_session)]):
-    """Update a single payment by ID"""
+@app.get("/stripe-callback/payment-fail/")
+async def payment_fail(session_id: str, session: Session = Depends(get_session)):
     try:
-        return update_payment_by_id(payment_id=payment_id, to_update_payment_data=payment, session=session)
+        payment_status, order_id = get_payment_intent_status(session_id)
+        payment = update_payment_status(session, order_id=order_id, status="failed")
+        return {"message": "Payment failed", "payment_status": payment_status, "order_id": payment.order_id}
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"{e}")
+
+
