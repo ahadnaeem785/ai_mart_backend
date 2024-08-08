@@ -21,20 +21,13 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables..")
-    # task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, 'broker:19092'))
+    print("Creating tables...")
     create_db_and_tables()
     yield
 
 
 app = FastAPI(lifespan=lifespan, title="Hello World API with DB", 
     version="0.0.1",
-    # servers=[
-    #     {
-    #         "url": "http://127.0.0.1:8000", # ADD NGROK URL Here Before Creating GPT Action
-    #         "description": "Development Server"
-    #     }
-    #     ]
         )
 
 
@@ -43,11 +36,6 @@ app = FastAPI(lifespan=lifespan, title="Hello World API with DB",
 def read_root():
     return {"User": "Service"}
 
-
-# @app.post("/users/", response_model=User)
-# def create_new_user(user_data: User, session: Annotated[Session, Depends(get_session)]):
-#     new_user = add_new_user(user_data=user_data, session=session)
-#     return new_user
 
 @app.get("/users/", response_model=list[User])
 def read_users(session: Annotated[Session, Depends(get_session)]):
@@ -71,10 +59,22 @@ def delete_user(user_id: int, session: Annotated[Session, Depends(get_session)])
         raise e
 
 @app.patch("/users/{user_id}", response_model=UserUpdate)
-def update_single_user(user_id: int, user: UserUpdate, session: Annotated[Session, Depends(get_session)]):
+async def update_single_user(user_id: int, user: UserUpdate, session: Annotated[Session, Depends(get_session)],producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
     """ Update a single user by ID"""
     try:
-        return update_user_by_id(user_id=user_id, to_update_user_data=user, session=session)
+        user = update_user_by_id(user_id=user_id, to_update_user_data=user, session=session)
+        print("User", user)
+        # Send notification about new user registration
+        notification_message = {
+            "user_id": user.id,
+            "title": "User Updated",
+            "message": f"User {user.username} has been Updated successfully.",
+            "recipient": user.email,
+            "status": "pending"
+        }
+        notification_json = json.dumps(notification_message).encode("utf-8")
+        await producer.send_and_wait('notification-topic', notification_json)
+        return user
     except HTTPException as e:
         raise e
 
@@ -96,12 +96,17 @@ async def regiser_user(new_user:Annotated[Register_User, Depends()],
     session.commit()
     session.refresh(user)
 
-    #send the registered user into kafka topic 
-    user_dict = {field: getattr(user, field) for field in user.dict()}
-    user_json = json.dumps(user_dict).encode("utf-8")
-    print("user_JSON:", user_json)
-    await producer.send_and_wait("Add_User", user_json)
-    
+    # Send notification about new user registration
+    notification_message = {
+        "user_id": user.id,
+        "title": "User Registered",
+        "message": f"User {user.username} has been registered successfully.",
+        "recipient": user.email,
+        "status": "pending"
+    }
+    notification_json = json.dumps(notification_message).encode("utf-8")
+    await producer.send_and_wait(settings.KAFKA_NOTIFICATION_TOPIC, notification_json)
+
     return {"message": f""" {user.username} successfully registered """}    
 
 

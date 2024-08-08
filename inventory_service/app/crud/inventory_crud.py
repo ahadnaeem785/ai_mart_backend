@@ -62,18 +62,3 @@ def update_inventory_by_id(product_id: int, update_product_inventory:InventoryIt
 #         raise HTTPException(status_code=404, detail="Product not found")    
 
 
-
-
-
-# #update inventory stock when payment is succeeded
-# def update_stock(order_data):
-#     with Session(engine) as session:
-#         inventory = session.exec(select(Inventory).where(Inventory.product_id == order_data["product_id"])).one_or_none()
-#         if inventory:
-#             inventory.quantity -= order_data["quantity"]
-#             session.add(inventory)
-#             session.commit()
-#             session.refresh(inventory)
-#             print(f"Updated inventory for product_id {order_data['product_id']}: new stock is {inventory.stock}")
-#         else:
-#             print(f"No inventory found for product_id {order_data['product_id']}")

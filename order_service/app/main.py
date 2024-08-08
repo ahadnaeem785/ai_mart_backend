@@ -29,21 +29,18 @@ def create_db_and_tables()->None:
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
     print("Creating tables.......")
     #listens the order-check-response topic
-    task = asyncio.create_task(consume_order_response_messages("order-check-response", 'broker:19092'))
-    asyncio.create_task(consume_payment_response_message("payment_succeeded", 'broker:19092'))
+    task = asyncio.create_task(consume_order_response_messages("order-check-response", settings.BOOTSTRAP_SERVER))
+    asyncio.create_task(consume_payment_response_message("payment_succeeded", settings.BOOTSTRAP_SERVER))
     create_db_and_tables()
     yield 
 
 
-app = FastAPI(lifespan=lifespan, title="Order API with DB", 
-    version="0.0.1",
-    # servers=[
-    #     {
-    #         "url": "http://127.0.0.1:8000", # ADD NGROK URL Here Before Creating GPT Action
-    #         "description": "Development Server"
-    #     }
-    #     ]
-        )
+app = FastAPI(lifespan=lifespan,
+            title="Order API with DB", 
+            version="0.0.1"
+            )
+
+            
 @app.get("/")
 def read_root():
     return {"Welcome": "order_service"}
@@ -55,16 +52,30 @@ def login(token:LoginForAccessTokenDep):
 
 
 @app.post("/orders/", response_model=Order)
-async def create_order(order: OrderCreate, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)], current_user: GetCurrentUserDep):
+async def create_order(order: Order, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)], current_user: GetCurrentUserDep):
     product_price = get_product_price(order.product_id)
     print("Product Price:", product_price)
     order_data = Order(**order.dict(exclude={"user_id"}), user_id=current_user["id"])
     new_order = send_order_to_kafka(session, order_data, product_price)
-
+    # send order to kafka topic 
     order_dict = {field: getattr(order_data, field) for field in new_order.dict()}
     order_json = json.dumps(order_dict).encode("utf-8")
     print("orderJSON:", order_json)
-    await producer.send_and_wait("order_placed", order_json)
+    await producer.send_and_wait(settings.KAFKA_ORDER_TOPIC, order_json)
+
+    # Create notification message
+    notification_message = {
+        "user_id": current_user["id"],
+        "username": current_user["username"],
+        "email": current_user["email"],
+        "title": "Order Created",
+        "message": f"Order ID {new_order.id} has been successfully created by {current_user['username']}.",
+        "recipient": current_user["email"],
+        "status": "pending"
+    }
+    notification_json = json.dumps(notification_message).encode("utf-8")
+    await producer.send_and_wait(settings.KAFKA_NOTIFICATION_TOPIC, notification_json)
+
     return new_order
 
 @app.get("/orders/{order_id}", response_model=OrderRead)
@@ -86,5 +97,18 @@ def delete_order_by_id(order_id: int, session: Annotated[Session, Depends(get_se
 @app.patch("/orders/{order_id}", response_model=Order)
 def update_status(order_id: int, status: str, session: Annotated[Session, Depends(get_session)], current_user: GetCurrentUserDep):
     order = update_order_status(session, order_id, current_user["id"], status)
+    # # Create notification message
+    # notification_message = {
+    #     "user_id": current_user["id"],
+    #     "username": current_user["username"],
+    #     "email": current_user["email"],
+    #     "title": "Order Created",
+    #     "message": f"Order ID {new_order.id} has been successfully created by {current_user['username']}.",
+    #     "recipient": current_user["email"],
+    #     "status": "pending"
+    # }
+    # notification_json = json.dumps(notification_message).encode("utf-8")
+    # await producer.send_and_wait("notification-topic", notification_json)
+
     return order
 

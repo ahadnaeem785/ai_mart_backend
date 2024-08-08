@@ -2,10 +2,11 @@ from sqlmodel import Session, select
 from app.models.payment_model import Payment, PaymentCreate, PaymentUpdate
 from fastapi import HTTPException
 import stripe
+from app.settings import STRIPE_API_KEY
 
-stripe.api_key = "sk_test_51Pgis3RoRfMmPaxp3mtohBmnPfe3TdB1ohkZToTOVYdACkxIB4BSaiG00HtbUQb0APCN2dhkKceUF2chYKFohPTA000cibX9gH"
+stripe.api_key = STRIPE_API_KEY
 
-def create_payment(session: Session, payment_data: PaymentCreate, user_id: int):
+def create_payment(session: Session, payment_data: PaymentCreate, user_id: int,username:str,email:str):
     if payment_data.method == "stripe":
         # return  {"working":"good"}
         checkout_session = stripe.checkout.Session.create(
@@ -30,6 +31,8 @@ def create_payment(session: Session, payment_data: PaymentCreate, user_id: int):
         payment = Payment(
             order_id=payment_data.order_id,
             user_id=user_id,
+            username=username,
+            email=email,
             amount=payment_data.amount,
             currency="usd",
             status="pending",
@@ -41,6 +44,8 @@ def create_payment(session: Session, payment_data: PaymentCreate, user_id: int):
             order_id=payment_data.order_id,
             user_id=user_id,
             amount=payment_data.amount,
+            username=username,
+            email=email,
             currency="usd",
             status="pending",
             method="cash_on_delivery"

@@ -15,12 +15,15 @@ from app.models.payment_model import Payment,PaymentCreate,PaymentUpdate
 from app.crud.payment_crud import create_payment,get_payment,update_payment_status,update_payment_status,get_payment_intent_status
 import stripe
 from app.shared_auth import get_current_user,get_login_for_access_token
+from app.settings import STRIPE_API_KEY
+ 
+stripe.api_key = STRIPE_API_KEY
 
 GetCurrentUserDep = Annotated[ Any, Depends(get_current_user)]
 LoginForAccessTokenDep = Annotated[dict, Depends(get_login_for_access_token)]
 
 
-stripe.api_key = "sk_test_51Pgis3RoRfMmPaxp3mtohBmnPfe3TdB1ohkZToTOVYdACkxIB4BSaiG00HtbUQb0APCN2dhkKceUF2chYKFohPTA000cibX9gH"
+
 
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
@@ -28,7 +31,7 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables..>>>>>>.")
+    print("Creating tables...")
     # task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, 'broker:19092'))
     create_db_and_tables()
     yield
@@ -50,13 +53,19 @@ app = FastAPI(lifespan=lifespan, title="Hello World API with DB",
 def read_root():
     return {"Payment": "Services"}
 
+
+@app.get("/test")
+def read_root():
+    SQLModel.metadata.create_all(engine)
+    return {"Payment": "Services"}
+
 @app.post("/auth/login")
 def login(token:LoginForAccessTokenDep):
     return token
 
 @app.post("/payments/")
 async def create_payment_endpoint(payment: PaymentCreate, session: Session = Depends(get_session), current_user: Any = Depends(get_current_user)):
-    pay_data,checkout_url = create_payment(session=session, payment_data=payment, user_id=current_user['id'])
+    pay_data,checkout_url = create_payment(session=session, payment_data=payment, user_id=current_user['id'],username=current_user['username'],email=current_user['email'])
     # return checkout_url
     if checkout_url:
         return {"Payment":pay_data,"checkout_url": checkout_url}
@@ -88,6 +97,18 @@ async def payment_success(session_id: str, session: Annotated[Session, Depends(g
                     "amount": payment.amount,
                 }
                 await producer.send_and_wait("payment_succeeded", json.dumps(event).encode('utf-8'))
+                # Create notification message
+                notification_message = {
+                    "user_id": payment.user_id,
+                    "username": payment.username,
+                    "email": payment.email,
+                    "title": "Payment Sent",
+                    "message": f"Amount {payment.amount}$ has been sent successfully by {payment.username}.",
+                    "recipient": payment.email,
+                    "status": "pending"
+                }
+                notification_json = json.dumps(notification_message).encode("utf-8")
+                await producer.send_and_wait("notification-topic", notification_json)
 
             return {"message": "Payment succeeded", "order_id": payment.order_id}
         else:

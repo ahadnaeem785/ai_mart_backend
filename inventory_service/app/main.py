@@ -27,16 +27,16 @@ def create_db_and_tables() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print("Creating table!!!!!")
-    task = asyncio.create_task(consume_messages("product-events", 'broker:19092'))
+    task = asyncio.create_task(consume_messages("product-events",settings.BOOTSTRAP_SERVER))
     
     asyncio.create_task(consume_order_messages(
     "order_placed",
-    'broker:19092'
+    settings.BOOTSTRAP_SERVER
     ))
 
     asyncio.create_task(consume_order_paid_messages(
     "order_paid",
-    'broker:19092'
+    settings.BOOTSTRAP_SERVER
     ))
 
     print("refresh")
@@ -56,17 +56,17 @@ def read_root():
     return {"Hello": "Inventory Service"}
 
 
-@app.post("/manage-inventory/", response_model=InventoryItem)
-async def create_new_inventory_item(item: InventoryItem, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
-    """ Create a new inventory item and send it to Kafka"""
+# @app.post("/manage-inventory/", response_model=InventoryItem)
+# async def create_new_inventory_item(item: InventoryItem, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
+#     """ Create a new inventory item and send it to Kafka"""
 
-    # item_dict = {field: getattr(item, field) for field in item.dict()}
-    # item_json = json.dumps(item_dict).encode("utf-8")
-    # print("item_JSON:", item_json)
-    # Produce message
-    # await producer.send_and_wait("AddStock", item_json)
-    # new_item = add_new_inventory_item(item, session)
-    return item
+#     # item_dict = {field: getattr(item, field) for field in item.dict()}
+#     # item_json = json.dumps(item_dict).encode("utf-8")
+#     # print("item_JSON:", item_json)
+#     # Produce message
+#     # await producer.send_and_wait("AddStock", item_json)
+#     # new_item = add_new_inventory_item(item, session)
+#     return item
 
 
 @app.get("/manage-inventory/all", response_model=list[InventoryItem])

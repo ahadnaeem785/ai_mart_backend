@@ -18,6 +18,16 @@ class Product(SQLModel,table=True):
     # rating: float | None = None # One to Manu Relationship
 
 
+
+
+class ProductCreate(SQLModel):
+    name : str
+    description : str
+    price : float
+    quantity: int | None = None # Shall it be managed by Inventory Microservice
+
+
+
 class ProductUpdate(SQLModel):
     name: str | None = None
     description: str | None = None

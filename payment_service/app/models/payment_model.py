@@ -6,6 +6,8 @@ class Payment(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     order_id: int
     user_id: int
+    username: str
+    email : str
     amount: float
     currency: str = Field(default="usd")
     status: str

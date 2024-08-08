@@ -11,48 +11,13 @@ from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
 from app.models.noti_models import Notification,NotificationUpdate
+from app.send_email import send_email_notification
+from app.consumer.notification_consumer import consume_messages
 from app.crud.noti_crud import add_new_notification,delete_notification_by_id,get_notification_by_id,get_all_notifications,update_notification_by_id
 
 
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
-
-# async def consume_messages(topic, bootstrap_servers):
-#     # Create a consumer instance.
-#     consumer = AIOKafkaConsumer(
-#         topic,
-#         bootstrap_servers=bootstrap_servers,
-#         group_id="product_consumer_group",
-#         auto_offset_reset='earliest'
-#     )
-
-#     # Start the consumer.
-#     await consumer.start()
-#     try:
-#         # Continuously listen for messages.
-#         async for message in consumer:
-#             print("RAW")
-#             print(f"Received message on topic {message.topic}")
-
-#             product_data = json.loads(message.value.decode())
-#             print("TYPE", (type(product_data)))
-#             print(f"Product Data {product_data}")
-
-
-            
-#             with next(get_session()) as session:
-#                 print("SAVING DATA TO DATABSE")
-#                 db_insert_product = add_new_product(
-#                     product_data=Product(**product_data), session=session)
-#                 print("DB_INSERT_PRODUCT", db_insert_product)
-                
-#             # print(f"Received message: {message.value.decode()} on topic {message.topic}")
-#             # Here you can add code to process each message.
-#             # Example: parse the message, store it in a database, etc.
-#     finally:
-#         # Ensure to close the consumer when done.
-#         await consumer.stop()
-
 
 # # The first part of the function, before the yield, will
 # # be executed before the application starts.
@@ -60,8 +25,8 @@ def create_db_and_tables()->None:
 # # loop = asyncio.get_event_loop()
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables....")
-    # task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, 'broker:19092'))
+    print("Creating tables.......")
+    task = asyncio.create_task(consume_messages("notification-topic", 'broker:19092'))
     create_db_and_tables()
     yield
 
@@ -87,7 +52,14 @@ def read_root():
     SQLModel.metadata.create_all(engine)
     return {"Noti": "Service"}
 
-
+@app.get("/send-mail")
+def send_mail_checker(email_to:str,subject:str,email_content_for_send:str):
+    send_email_notification(
+                        email_to=email_to,
+                        subject=subject,
+                        email_content_for_send=email_content_for_send
+                    )
+    return {"message": "Email sent successfully"}
 
 @app.post("/notifications/", response_model=Notification)
 async def create_new_notification(notification: Notification, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
