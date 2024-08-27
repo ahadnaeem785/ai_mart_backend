@@ -8,14 +8,16 @@ from typing import Optional
 
 
 class OrderBase(SQLModel):
+    id: Optional[int] = Field(default=None, primary_key=True)
     product_id: int
-    user_id: int
+    # user_id: int
     quantity: int
-    total_price: float
+    # total_price: float
     status: str = Field(default="Unpaid")
 
 class Order(OrderBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    total_price: float
+    user_id: int
     # created_at: datetime = Field(default_factory=datetime.utcnow)
     # updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -24,6 +26,8 @@ class OrderCreate(OrderBase):
 
 class OrderRead(OrderBase):
     id: int
+    total_price: float
+    user_id: int
     # created_at: datetime
     # updated_at: datetime
 

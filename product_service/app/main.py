@@ -7,32 +7,28 @@ from typing import AsyncGenerator
 from aiokafka import AIOKafkaConsumer,AIOKafkaProducer
 import asyncio
 import json
+from sqlmodel import create_engine
 from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
 from app.models.product_model import Product,ProductUpdate
 from app.crud.product_crud import get_all_products,delete_product_by_id,update_product_by_id,get_product_by_id
 from app.consumer.product_consumer import consume_messages
-# from app.consumer.inventory_consumer import consume_inventory_messages
 
 
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
 
 
-# The first part of the function, before the yield, will
-# be executed before the application starts.
-# https://fastapi.tiangolo.com/advanced/events/#lifespan-function
-# loop = asyncio.get_event_loop()
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables...")
+    print("Creating tables.......")
     task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, settings.BOOTSTRAP_SERVER))
     create_db_and_tables()
     yield
 
 
-app = FastAPI(lifespan=lifespan, title="Hello World API with DB", 
+app = FastAPI(lifespan=lifespan, title="Product API with DB", 
     version="0.0.1",
     # servers=[
     #     {
@@ -47,7 +43,6 @@ app = FastAPI(lifespan=lifespan, title="Hello World API with DB",
 @app.get("/")
 def read_root():
     return {"Product": "Service"}
-
 
 
 @app.post("/products/", response_model=Product)
@@ -74,8 +69,6 @@ def read_single_product(product_id: int, session: Annotated[Session, Depends(get
         raise e
 
 
-
-
 @app.delete("/products/{product_id}")
 def delete_products(product_id:int , session: Annotated[Session, Depends(get_session)]):
     """ Delete a single product by ID"""
@@ -85,6 +78,7 @@ def delete_products(product_id:int , session: Annotated[Session, Depends(get_ses
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.patch("/products/{product_id}", response_model=Product)
 def update_single_product(product_id: int, product: ProductUpdate, session: Annotated[Session, Depends(get_session)]):

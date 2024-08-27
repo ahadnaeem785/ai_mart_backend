@@ -27,7 +27,7 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables.......")
+    print("Creating tables...")
     #listens the order-check-response topic
     task = asyncio.create_task(consume_order_response_messages("order-check-response", settings.BOOTSTRAP_SERVER))
     asyncio.create_task(consume_payment_response_message("payment_succeeded", settings.BOOTSTRAP_SERVER))
@@ -52,7 +52,7 @@ def login(token:LoginForAccessTokenDep):
 
 
 @app.post("/orders/", response_model=Order)
-async def create_order(order: Order, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)], current_user: GetCurrentUserDep):
+async def create_order(order: OrderCreate, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)], current_user: GetCurrentUserDep):
     product_price = get_product_price(order.product_id)
     print("Product Price:", product_price)
     order_data = Order(**order.dict(exclude={"user_id"}), user_id=current_user["id"])
@@ -86,9 +86,6 @@ def read_order(order_id: int, session: Session = Depends(get_session), current_u
 def list_orders(session: Session = Depends(get_session), current_user: Any = Depends(get_current_user)):
     return get_all_orders(session, current_user["id"])
 
-# @app.patch("/orders/{order_id}", response_model=OrderRead)
-# def update_order_item(order_id: int, order: OrderUpdate, session: Annotated[Session, Depends(get_session)], current_user: GetCurrentUserDep ):
-#     return update_order(session=session, order_id=order_id, user_id=current_user["id"], to_update_order=order)
 
 @app.delete("/orders/{order_id}")
 def delete_order_by_id(order_id: int, session: Annotated[Session, Depends(get_session)], current_user: Any = Depends(get_current_user)):

@@ -67,19 +67,7 @@ def get_payment(session: Session, payment_id: int, user_id: int) -> Payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     return payment
 
-def update_payment_status(session: Session, payment_id: int, status: str):
-    payment = session.get(Payment, payment_id)
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
-    payment.status = status
-    session.add(payment)
-    session.commit()
-    session.refresh(payment)
-    return payment
-
-
-
-def update_payment_status(session: Session, order_id: int, status: str):
+def payment_status_update(session: Session, order_id: int, status: str):
     payment = session.exec(select(Payment).where(Payment.order_id == order_id)).one_or_none()
     if payment:
         payment.status = status

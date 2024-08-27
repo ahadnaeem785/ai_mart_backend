@@ -19,26 +19,16 @@ from app.crud.noti_crud import add_new_notification,delete_notification_by_id,ge
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
 
-# # The first part of the function, before the yield, will
-# # be executed before the application starts.
-# # https://fastapi.tiangolo.com/advanced/events/#lifespan-function
-# # loop = asyncio.get_event_loop()
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables.......")
+    print("Creating tables....")
     task = asyncio.create_task(consume_messages("notification-topic", 'broker:19092'))
     create_db_and_tables()
     yield
 
 
-app = FastAPI(lifespan=lifespan, title="Hello World API with DB", 
+app = FastAPI(lifespan=lifespan, title="Notification API with DB", 
     version="0.0.1",
-    # servers=[
-    #     {
-    #         "url": "http://127.0.0.1:8000", # ADD NGROK URL Here Before Creating GPT Action
-    #         "description": "Development Server"
-    #     }
-    #     ]
         )
 
 
@@ -47,28 +37,24 @@ app = FastAPI(lifespan=lifespan, title="Hello World API with DB",
 def read_root():
     return {"Noti": "Service"}
 
-@app.get("/test")
-def read_root():
-    SQLModel.metadata.create_all(engine)
-    return {"Noti": "Service"}
 
-@app.get("/send-mail")
-def send_mail_checker(email_to:str,subject:str,email_content_for_send:str):
-    send_email_notification(
-                        email_to=email_to,
-                        subject=subject,
-                        email_content_for_send=email_content_for_send
-                    )
-    return {"message": "Email sent successfully"}
+# @app.get("/send-mail")
+# def send_mail_checker(email_to:str,subject:str,email_content_for_send:str):
+#     send_email_notification(
+#                         email_to=email_to,
+#                         subject=subject,
+#                         email_content_for_send=email_content_for_send
+#                     )
+#     return {"message": "Email sent successfully"}
 
-@app.post("/notifications/", response_model=Notification)
-async def create_new_notification(notification: Notification, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
-    # notification_dict = {field: getattr(notification, field) for field in notification.dict()}
-    # notification_json = json.dumps(notification_dict).encode("utf-8")
-    # print("notificationJSON:", notification_json)
-    # # Produce message
-    # await producer.send_and_wait(settings.KAFKA_NOTIFICATION_TOPIC, notification_json)
-    return add_new_notification(notification_data=notification, session=session)
+# @app.post("/notifications/", response_model=Notification)
+# async def create_new_notification(notification: Notification, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
+#     # notification_dict = {field: getattr(notification, field) for field in notification.dict()}
+#     # notification_json = json.dumps(notification_dict).encode("utf-8")
+#     # print("notificationJSON:", notification_json)
+#     # # Produce message
+#     # await producer.send_and_wait(settings.KAFKA_NOTIFICATION_TOPIC, notification_json)
+#     return add_new_notification(notification_data=notification, session=session)
     
 
 @app.get("/notifications/", response_model=list[Notification])

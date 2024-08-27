@@ -21,15 +21,14 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables...")
+    print("Creating tables.....")
     create_db_and_tables()
     yield
 
 
-app = FastAPI(lifespan=lifespan, title="Hello World API with DB", 
+app = FastAPI(lifespan=lifespan, title="User API with DB", 
     version="0.0.1",
         )
-
 
 
 @app.get("/")

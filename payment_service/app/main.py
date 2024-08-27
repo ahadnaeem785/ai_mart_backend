@@ -12,7 +12,7 @@ from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
 from app.models.payment_model import Payment,PaymentCreate,PaymentUpdate
-from app.crud.payment_crud import create_payment,get_payment,update_payment_status,update_payment_status,get_payment_intent_status
+from app.crud.payment_crud import create_payment,get_payment,payment_status_update,get_payment_intent_status
 import stripe
 from app.shared_auth import get_current_user,get_login_for_access_token
 from app.settings import STRIPE_API_KEY
@@ -23,21 +23,18 @@ GetCurrentUserDep = Annotated[ Any, Depends(get_current_user)]
 LoginForAccessTokenDep = Annotated[dict, Depends(get_login_for_access_token)]
 
 
-
-
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables...")
-    # task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, 'broker:19092'))
+    print("Creating tables.......")
     create_db_and_tables()
     yield
 
 
-app = FastAPI(lifespan=lifespan, title="Hello World API with DB", 
+app = FastAPI(lifespan=lifespan, title="Payment API with DB", 
     version="0.0.1",
     # servers=[
     #     {
@@ -53,11 +50,6 @@ app = FastAPI(lifespan=lifespan, title="Hello World API with DB",
 def read_root():
     return {"Payment": "Services"}
 
-
-@app.get("/test")
-def read_root():
-    SQLModel.metadata.create_all(engine)
-    return {"Payment": "Services"}
 
 @app.post("/auth/login")
 def login(token:LoginForAccessTokenDep):
@@ -82,13 +74,12 @@ def update_payment(payment_id: int, payment_update: PaymentUpdate, session: Sess
     return updated_payment
 
 
-   
 @app.get("/stripe-callback/payment-success/")
 async def payment_success(session_id: str, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
     try:
         payment_status, order_id = get_payment_intent_status(session_id)
         if payment_status == "succeeded":
-            payment = update_payment_status(session, order_id=order_id, status="completed")
+            payment = payment_status_update(session, order_id=order_id, status="completed")
             if payment:
                 event = {
                     "order_id": payment.order_id,
@@ -105,7 +96,7 @@ async def payment_success(session_id: str, session: Annotated[Session, Depends(g
                     "title": "Payment Sent",
                     "message": f"Amount {payment.amount}$ has been sent successfully by {payment.username}.",
                     "recipient": payment.email,
-                    "status": "pending"
+                    "status": "succeeded"
                 }
                 notification_json = json.dumps(notification_message).encode("utf-8")
                 await producer.send_and_wait("notification-topic", notification_json)
@@ -123,7 +114,7 @@ async def payment_success(session_id: str, session: Annotated[Session, Depends(g
 async def payment_fail(session_id: str, session: Session = Depends(get_session)):
     try:
         payment_status, order_id = get_payment_intent_status(session_id)
-        payment = update_payment_status(session, order_id=order_id, status="failed")
+        payment = payment_status_update(session, order_id=order_id, status="failed")
         return {"message": "Payment failed", "payment_status": payment_status, "order_id": payment.order_id}
     except HTTPException as e:
         raise e

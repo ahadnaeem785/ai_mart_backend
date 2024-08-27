@@ -16,6 +16,6 @@ def update_stock_in_inventory(order_data):
             session.add(inventory)
             session.commit()
             session.refresh(inventory)
-            print(f"Updated inventory for product_id {order_data['product_id']}: new stock is {inventory.stock}")
+            print(f"Updated inventory for product_id {order_data['product_id']}: new stock is {inventory.quantity}")
         else:
             print(f"No inventory found for product_id {order_data['product_id']}")

@@ -36,8 +36,6 @@ async def consume_messages(topic, bootstrap_servers):
                 print("DB_INSERT_PRODUCT", db_insert_product)
                 
             print(f"Received message: {message.value.decode()} on topic {message.topic}")
-            # Here you can add code to process each message.
-            # Example: parse the message, store it in a database, etc.
     finally:
         # Ensure to close the consumer when done.
         await consumer.stop()

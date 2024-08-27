@@ -82,8 +82,8 @@ services:
     restart: always
     container_name: PostgresPaymentCont
     environment:
-        - POSTGRES_USER=ziakhan
-        - POSTGRES_PASSWORD=my_password
+        - POSTGRES_USER=muhammadahad
+        - POSTGRES_PASSWORD=ahadnaeem785
         - POSTGRES_DB=mydatabase
     ports:
         - '5433:5432'
@@ -108,8 +108,8 @@ services:
     restart: always
     container_name: PostgresOrderCont
     environment:
-        - POSTGRES_USER=ziakhan
-        - POSTGRES_PASSWORD=my_password
+        - POSTGRES_USER=muhammadahad
+        - POSTGRES_PASSWORD=ahadnaeem785
         - POSTGRES_DB=mydatabase
     ports:
         - '5435:5432'
@@ -121,8 +121,8 @@ services:
     restart: always
     container_name: PostgresInventoryCont
     environment:
-        - POSTGRES_USER=ziakhan
-        - POSTGRES_PASSWORD=my_password
+        - POSTGRES_USER=muhammadahad
+        - POSTGRES_PASSWORD=ahadnaeem785
         - POSTGRES_DB=mydatabase
     ports:
         - '5436:5432'
@@ -134,8 +134,8 @@ services:
     restart: always
     container_name: PostgresUserCont
     environment:
-        - POSTGRES_USER=ziakhan
-        - POSTGRES_PASSWORD=my_password
+        - POSTGRES_USER=muhammadahad
+        - POSTGRES_PASSWORD=ahadnaeem785
         - POSTGRES_DB=mydatabase
     ports:
         - '5437:5432'
@@ -147,8 +147,8 @@ services:
     restart: always
     container_name: PostgresNotiCont
     environment:
-        - POSTGRES_USER=ziakhan
-        - POSTGRES_PASSWORD=my_password
+        - POSTGRES_USER=muhammadahad
+        - POSTGRES_PASSWORD=ahadnaeem785
         - POSTGRES_DB=mydatabase
     ports:
         - '5438:5432'
