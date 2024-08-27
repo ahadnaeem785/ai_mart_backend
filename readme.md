@@ -115,7 +115,7 @@ For setting up the services, the following environment variables are used:
    cd your-project
 
 2. **Build and run the services:**
-    ```docker-compose up --build
+    - docker-compose up --build
 
 3. **Access the services**:
    (Use /docs after the url for Fast Api Swagger Ui)
