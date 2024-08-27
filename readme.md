@@ -118,13 +118,14 @@ For setting up the services, the following environment variables are used:
     ```docker-compose up --build
 
 3. **Access the services**:
-
+   (Use /docs after the url for Fast Api Swagger Ui)
    - User Service: http://localhost:8005
    - Product Service: http://localhost:8003
    - Order Service: http://localhost:8004
    - Payment Service: http://localhost:8001
    - Inventory Service: http://localhost:8002
    - Notification Service: http://localhost:8006
+   - Kafka Ui port : http://localhost:8080
 
 4. **Testing:**
 
