@@ -1,51 +1,94 @@
-# 02_kafka_messaging
+# Microservices-Based E-Commerce Platform
 
-### AIOKafkaProducer
+This project is an advanced e-commerce platform built using microservices architecture. It consists of six distinct services: Product, Inventory, Order, Payment, Notification, and User. Each service is self-contained, scalable, and communicates with others via Kafka for event-driven architecture.
 
-AIOKafkaProducer is a high-level, asynchronous message producer.
+## Table of Contents
 
-Example of AIOKafkaProducer usage:
+- [Project_Description]
+- [Services_Overview]
+- [Architecture_Diagram]
+- [Prerequisites]
+- [Setup_Instructions]
 
-```
-from aiokafka import AIOKafkaProducer
+## Project Description
 
-# Kafka Producer as a dependency
-async def get_kafka_producer():
-    producer = AIOKafkaProducer(bootstrap_servers='broker:19092')
-    await producer.start()
-    try:
-        # Produce message
-        await producer.send_and_wait("my_topic", b"Super message")
-    finally:
-        await producer.stop()
-```
+This platform enables users to manage products, inventory, orders, and payments seamlessly across distributed services. The integration with Stripe for payment processing and Kafka for asynchronous communication makes this system robust, flexible, and scalable.
 
-### AIOKafkaConsumer
-AIOKafkaConsumer is a high-level, asynchronous message consumer. It interacts with the assigned Kafka Group Coordinator node to allow multiple consumers to load balance consumption of topics (requires kafka >= 0.9.0.0).
+## Services Overview
 
-Example of AIOKafkaConsumer usage:
+### 1. **Product Service**
+   - **Responsibilities**: Manages product data, including creation, updates, and retrieval.
+   - **Database**: PostgreSQL.
+   - **Key Endpoints**: 
+     - `POST /products/`
+     - `GET /products/`
+     - `GET /products/{product_id}`
+     - `PATCH /products/{product_id}`
+     - `DELETE /products/{product_id}`
 
-```
-from aiokafka import AIOKafkaConsumer
-import asyncio
+### 2. **Inventory Service**
+   - **Responsibilities**: Manages inventory levels, updating stock based on orders.
+   - **Database**: PostgreSQL.
+   - **Key Endpoints**:
+     - `PATCH /inventory/{product_id}` - Adjust stock based on orders.
+     - Listens to Kafka topics for order status and payment completion.
 
-async def consume_messages():
-    consumer = AIOKafkaConsumer(
-        'my_topic', 'my_other_topic',
-        bootstrap_servers='localhost:9092',
-        group_id="my-group")
-    # Get cluster layout and join group `my-group`
-    await consumer.start()
-    try:
-        # Consume messages
-        async for msg in consumer:
-            print("consumed: ", msg.topic, msg.partition, msg.offset,
-                  msg.key, msg.value, msg.timestamp)
-    finally:
-        # Will leave consumer group; perform autocommit if enabled.
-        await consumer.stop()
+### 3. **Order Service**
+   - **Responsibilities**: Manages orders from creation to payment tracking.
+   - **Database**: PostgreSQL.
+   - **Key Endpoints**:
+     - `POST /orders/`
+     - `GET /orders/`
+     - `PATCH /orders/{order_id}` - Updates the status of an order.
 
-asyncio.create_task(consume_messages())
-```
+### 4. **Payment Service**
+   - **Responsibilities**: Integrates with Stripe for payment processing, handles payment status updates.
+   - **Database**: PostgreSQL.
+   - **Key Endpoints**:
+     - `POST /payments/` - Initiates a payment.
+     - `GET /stripe-callback/payment-success/` - Handles successful payment.
+     - `GET /stripe-callback/payment-fail/` - Handles failed payment.
+   - **Integration**: Sends events to update order status upon payment success.
 
-https://github.com/aio-libs/aiokafka
+### 5. **Notification Service**
+   - **Responsibilities**: Sends notifications (e.g., order confirmation, payment success).
+   - **Database**: None (stateless service, could use external notification systems like Twilio, SendGrid).
+   - **Integration**: Listens to Kafka topics to trigger notifications.
+
+### 6. **User Service**
+   - **Responsibilities**: Handles user authentication, registration, and profile management.
+   - **Database**: PostgreSQL.
+   - **Key Endpoints**:
+     - `POST /register/`
+     - `POST /token/` - Generates JWT tokens for authentication.
+     - `GET /user_profile/` - Retrieves user profile information.
+
+## Architecture Diagram
+
+![Architecture_Diagram]
+
+The architecture follows a microservices pattern where each service is isolated and communicates with others via Kafka. The use of FastAPI allows for asynchronous operations, making the system highly responsive and scalable.
+
+## Prerequisites
+
+- **Docker**: To run services in containers.
+- **Kafka**: For inter-service communication.
+- **PostgreSQL**: Each service that requires a database uses PostgreSQL.
+- **Stripe API**: For handling payments in the Payment service.
+- **FastAPI**: All services are built using FastAPI.
+
+## Setup Instructions
+
+1. **Clone the Repository**
+
+    ```bash
+    git clone https://github.com/ahadnaeem785/mart_project
+    cd yourprojectname
+    ```
+
+2. **Set Up Docker and Kafka**
+   
+   Ensure Docker and Kafka are running:
+   
+   ```bash
+   docker compose up --build
