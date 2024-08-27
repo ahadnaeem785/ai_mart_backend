@@ -1,94 +1,136 @@
-# Microservices-Based E-Commerce Platform
+# Event-Driven Microservices Application
 
-This project is an advanced e-commerce platform built using microservices architecture. It consists of six distinct services: Product, Inventory, Order, Payment, Notification, and User. Each service is self-contained, scalable, and communicates with others via Kafka for event-driven architecture.
+## Overview
 
-## Table of Contents
+This project is a comprehensive event-driven microservices architecture designed to handle an online marketplace. It includes various services that work together seamlessly to manage products, orders, payments, inventory, notifications, and user authentication. The communication between services is handled using Kafka, ensuring that each service operates independently and scales efficiently. Additionally, SMTP email is integrated for sending notifications to users and administrators.
 
-- [Project_Description]
-- [Services_Overview]
-- [Architecture_Diagram]
-- [Prerequisites]
-- [Setup_Instructions]
+## Services
 
-## Project Description
+### 1. User Service
+- **Purpose:** Manages user authentication and authorization.
+- **Features:**
+  - User registration and login with JWT-based authentication.
+  - Role-based access control (RBAC) with two roles: User and Admin.
+  - Admin can view and manage all users, while users can only view and update their own profiles.
 
-This platform enables users to manage products, inventory, orders, and payments seamlessly across distributed services. The integration with Stripe for payment processing and Kafka for asynchronous communication makes this system robust, flexible, and scalable.
+### 2. Product Service
+- **Purpose:** Manages product catalog.
+- **Features:**
+  - Admin can add, update, and delete products.
+  - Users can view all products.
+  - Each product contains details such as price, description, and stock status.
 
-## Services Overview
+### 3. Order Service
+- **Purpose:** Handles order creation and management.
+- **Features:**
+  - Users can place orders for products.
+  - Orders are associated with users and stored with a status of "Unpaid" until payment is confirmed.
+  - Orders communicate with the Inventory Service to ensure stock availability and update inventory levels after payment.
 
-### 1. **Product Service**
-   - **Responsibilities**: Manages product data, including creation, updates, and retrieval.
-   - **Database**: PostgreSQL.
-   - **Key Endpoints**: 
-     - `POST /products/`
-     - `GET /products/`
-     - `GET /products/{product_id}`
-     - `PATCH /products/{product_id}`
-     - `DELETE /products/{product_id}`
+### 4. Payment Service
+- **Purpose:** Manages payment processing using Stripe.
+- **Features:**
+  - Users can choose between "Cash on Delivery" or Stripe for online payments.
+  - Payments are linked to orders, and successful payments trigger events that update order status and inventory levels.
+  - Stripe payments redirect users to Stripe’s checkout and handle callback responses to confirm payment status.
 
-### 2. **Inventory Service**
-   - **Responsibilities**: Manages inventory levels, updating stock based on orders.
-   - **Database**: PostgreSQL.
-   - **Key Endpoints**:
-     - `PATCH /inventory/{product_id}` - Adjust stock based on orders.
-     - Listens to Kafka topics for order status and payment completion.
+### 5. Inventory Service
+- **Purpose:** Manages product inventory.
+- **Features:**
+  - Updates stock levels when payments are confirmed.
+  - Consumes Kafka events to handle inventory updates, ensuring consistency with orders and payments.
 
-### 3. **Order Service**
-   - **Responsibilities**: Manages orders from creation to payment tracking.
-   - **Database**: PostgreSQL.
-   - **Key Endpoints**:
-     - `POST /orders/`
-     - `GET /orders/`
-     - `PATCH /orders/{order_id}` - Updates the status of an order.
+### 6. Notification Service
+- **Purpose:** Sends notifications to users.
+- **Features:**
+  - Users receive notifications for various events, such as order creation and payment confirmation.
+  - Admins can manage all notifications, while users can only view their own notifications.
+  - **SMTP Email Integration:** Sends email notifications to users and admins for important events, such as successful order placements and payment confirmations.
 
-### 4. **Payment Service**
-   - **Responsibilities**: Integrates with Stripe for payment processing, handles payment status updates.
-   - **Database**: PostgreSQL.
-   - **Key Endpoints**:
-     - `POST /payments/` - Initiates a payment.
-     - `GET /stripe-callback/payment-success/` - Handles successful payment.
-     - `GET /stripe-callback/payment-fail/` - Handles failed payment.
-   - **Integration**: Sends events to update order status upon payment success.
+## Technologies Used
 
-### 5. **Notification Service**
-   - **Responsibilities**: Sends notifications (e.g., order confirmation, payment success).
-   - **Database**: None (stateless service, could use external notification systems like Twilio, SendGrid).
-   - **Integration**: Listens to Kafka topics to trigger notifications.
+- **FastAPI:** For building and running the microservices.
+- **SQLModel:** ORM for database operations.
+- **Kafka:** For event-driven communication between services.
+- **Stripe:** For handling online payments.
+- **Docker & Docker Compose:** Containerization of services for easy deployment.
+- **PgAdmin:** For managing the PostgreSQL database.
+- **OAuth2 & JWT:** For secure user authentication and authorization.
+- **SMTP:** For sending email notifications.
 
-### 6. **User Service**
-   - **Responsibilities**: Handles user authentication, registration, and profile management.
-   - **Database**: PostgreSQL.
-   - **Key Endpoints**:
-     - `POST /register/`
-     - `POST /token/` - Generates JWT tokens for authentication.
-     - `GET /user_profile/` - Retrieves user profile information.
+## Architecture
 
-## Architecture Diagram
+The architecture follows a microservices approach where each service is independent and communicates asynchronously via Kafka. The use of Docker ensures that each service can be deployed and scaled independently. The user service provides authentication and role-based access control across all services.
 
-![Architecture_Diagram]
+### Key Flows
 
-The architecture follows a microservices pattern where each service is isolated and communicates with others via Kafka. The use of FastAPI allows for asynchronous operations, making the system highly responsive and scalable.
+#### User Registration & Login
+- Users register and log in via the User Service, receiving a JWT token for authentication.
+- The JWT token is used to authenticate requests across other services.
 
-## Prerequisites
+#### Placing an Order
+- Users place orders via the Order Service, which checks inventory and calculates the total price.
+- Orders are initially marked as "Unpaid" and an event is produced for payment processing.
 
-- **Docker**: To run services in containers.
-- **Kafka**: For inter-service communication.
-- **PostgreSQL**: Each service that requires a database uses PostgreSQL.
-- **Stripe API**: For handling payments in the Payment service.
-- **FastAPI**: All services are built using FastAPI.
+#### Processing Payment
+- The Payment Service processes payments through Stripe.
+- Upon successful payment, an event is produced to update the order status and inventory levels.
 
-## Setup Instructions
+#### Inventory Management
+- The Inventory Service updates stock levels based on events received from the Payment Service.
+- Ensures that the stock is correctly managed and prevents overselling.
 
-1. **Clone the Repository**
+#### Notifications
+- Users receive notifications for actions such as successful order placement and payment confirmation.
+- Admins can view and manage all notifications, while users only see their own.
+- **Email Notifications:** Critical updates and notifications are sent via email using SMTP.
 
-    ```bash
-    git clone https://github.com/ahadnaeem785/mart_project
-    cd yourprojectname
-    ```
+## Environment Variables
 
-2. **Set Up Docker and Kafka**
-   
-   Ensure Docker and Kafka are running:
-   
+For setting up the services, the following environment variables are used:
+
+- `ADMIN_USERNAME`: The username for the initial admin user.
+- `ADMIN_EMAIL`: The email for the initial admin user.
+- `ADMIN_PASSWORD`: The password for the initial admin user.
+- `DATABASE_URL`: The database connection URL.
+- `KAFKA_BOOTSTRAP_SERVERS`: The Kafka bootstrap servers for event communication.
+- `STRIPE_SECRET_KEY`: The Stripe secret key for processing payments.
+- `SMTP_SERVER`: The SMTP server address for sending emails.
+- `SMTP_PORT`: The port number for the SMTP server.
+- `SMTP_USERNAME`: The username for the SMTP server authentication.
+- `SMTP_PASSWORD`: The password for the SMTP server authentication.
+
+## Getting Started
+
+### Prerequisites
+
+- Docker & Docker Compose
+- PgAdmin for database management (optional)
+
+### Running the Application
+
+1. **Clone the repository:**
    ```bash
-   docker compose up --build
+   git clone https://github.com/ahadnaeem785/mart_project
+   cd your-project
+
+2. **Build and run the services:**
+    ```docker-compose up --build
+
+3. **Access the services**:
+
+   - User Service: http://localhost:8005
+   - Product Service: http://localhost:8003
+   - Order Service: http://localhost:8004
+   - Payment Service: http://localhost:8001
+   - Inventory Service: http://localhost:8002
+   - Notification Service: http://localhost:8006
+
+4. **Testing:**
+
+   - Use tools like Postman or curl to interact with the APIs.
+   - Ensure each service is running and accessible through the specified ports.
+   - Test user registration, login, product management, order placement, and payment processing. 
+
+5. **Conclusion:**
+  - This project demonstrates the power and flexibility of microservices, combined with event-driven architecture. It showcases how independent services can work together to build a scalable, resilient, and maintainable system for an online marketplace.     
