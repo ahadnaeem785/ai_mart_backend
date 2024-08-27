@@ -11,7 +11,7 @@ from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
 from app.models.order_model import Order,OrderUpdate,OrderBase,OrderCreate,OrderRead
-from app.crud.order_cruds import place_order,get_all_orders,get_order,delete_order,update_order,send_order_to_kafka,get_product_price,update_order_status
+from app.crud.order_cruds import place_order,get_all_orders,get_order,delete_order,send_order_to_kafka,get_product_price,update_order_status
 import requests
 from app.consumer.order_check_reponse import consume_order_response_messages
 from app.consumer.order_status_update import consume_payment_response_message
@@ -53,17 +53,22 @@ def login(token:LoginForAccessTokenDep):
 
 @app.post("/orders/", response_model=Order)
 async def create_order(order: OrderCreate, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)], current_user: GetCurrentUserDep):
-    print("Currrr",current_user)
+    # Check if the current user is an admin
+    if current_user['role'] == 'admin':
+        raise HTTPException(status_code=403, detail="Admins are not allowed to place orders")
+
     product_price = get_product_price(order.product_id, token=current_user['access_token'])
     # product_price = get_product_price(order.product_id)
-    print("Product Price:", product_price)
+    # print("Product Price:", product_price)
+
     order_data = Order(**order.dict(exclude={"user_id"}), user_id=current_user["id"])
     new_order = send_order_to_kafka(session, order_data, product_price)
+
     # send order to kafka topic 
     order_dict = {field: getattr(order_data, field) for field in new_order.dict()}
-    # order_dict["token"] = current_user['access_token']
     order_json = json.dumps(order_dict).encode("utf-8")
     print("orderJSON:", order_json)
+    
     await producer.send_and_wait(settings.KAFKA_ORDER_TOPIC, order_json)
 
     # Create notification message
@@ -87,16 +92,16 @@ async def create_order(order: OrderCreate, session: Annotated[Session, Depends(g
 
 @app.get("/orders/", response_model=list[OrderRead])
 def list_orders(session: Session = Depends(get_session), current_user: Any = Depends(admin_required)):
-    return get_all_orders(session, current_user["id"])
+    return get_all_orders(session)
 
 
 @app.delete("/orders/{order_id}")
 def delete_order_by_id(order_id: int, session: Annotated[Session, Depends(get_session)], current_user: Any = Depends(admin_required)):
-    return delete_order(session=session, order_id=order_id, user_id=current_user["id"])
+    return delete_order(session=session, order_id=order_id)
         
 @app.patch("/orders/{order_id}", response_model=Order)
-def update_status(order_id: int, status: str, session: Annotated[Session, Depends(get_session)], current_user: admin_required):
-    order = update_order_status(session, order_id, current_user["id"], status)
+def update_status(order_id: int, status: str, session: Annotated[Session, Depends(get_session)], current_user: Any = Depends(admin_required)):
+    order = update_order_status(session, order_id, status)
     # # Create notification message
     # notification_message = {
     #     "user_id": current_user["id"],

@@ -14,6 +14,7 @@ from app.models.noti_models import Notification,NotificationUpdate
 from app.send_email import send_email_notification
 from app.consumer.notification_consumer import consume_messages
 from app.crud.noti_crud import add_new_notification,delete_notification_by_id,get_notification_by_id,get_all_notifications,update_notification_by_id
+from app.shared_auth import get_current_user,admin_required,LoginForAccessTokenDep
 
 
 def create_db_and_tables()->None:
@@ -21,7 +22,7 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables....")
+    print("Creating tables........")
     task = asyncio.create_task(consume_messages("notification-topic", 'broker:19092'))
     create_db_and_tables()
     yield
@@ -36,6 +37,10 @@ app = FastAPI(lifespan=lifespan, title="Notification API with DB",
 @app.get("/")
 def read_root():
     return {"Noti": "Service"}
+
+@app.post("/auth/login")
+def login(token:LoginForAccessTokenDep):
+    return token
 
 
 # @app.get("/send-mail")
@@ -57,12 +62,12 @@ def read_root():
 #     return add_new_notification(notification_data=notification, session=session)
     
 
-@app.get("/notifications/", response_model=list[Notification])
+@app.get("/notifications/", response_model=list[Notification],dependencies=[Depends(admin_required)])
 def read_notifications(session: Annotated[Session, Depends(get_session)]):
     """Get all notifications from the database"""
     return get_all_notifications(session)
 
-@app.get("/notifications/{notification_id}", response_model=Notification)
+@app.get("/notifications/{notification_id}", response_model=Notification,dependencies=[Depends(admin_required)])
 def read_single_notification(notification_id: int, session: Annotated[Session, Depends(get_session)]):
     """Read a single notification"""
     try:
@@ -70,7 +75,7 @@ def read_single_notification(notification_id: int, session: Annotated[Session, D
     except HTTPException as e:
         raise e
 
-@app.delete("/notifications/{notification_id}")
+@app.delete("/notifications/{notification_id}",dependencies=[Depends(admin_required)])
 def delete_notification(notification_id: int, session: Annotated[Session, Depends(get_session)]):
     """Delete a single notification by ID"""
     try:
@@ -80,7 +85,7 @@ def delete_notification(notification_id: int, session: Annotated[Session, Depend
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/notifications/{notification_id}", response_model=NotificationUpdate)
+@app.patch("/notifications/{notification_id}", response_model=NotificationUpdate,dependencies=[Depends(admin_required)])
 def update_single_notification(notification_id: int, notification: NotificationUpdate, session: Annotated[Session, Depends(get_session)]):
     """Update a single notification by ID"""
     try:
@@ -89,3 +94,13 @@ def update_single_notification(notification_id: int, notification: NotificationU
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/my-notifications/", response_model=list[Notification])
+async def read_my_notifications(session: Annotated[Session, Depends(get_session)], current_user: dict = Depends(get_current_user)):
+    """Retrieve all notifications for the currently authenticated user"""
+    user_id = current_user['id']
+    notifications = session.exec(select(Notification).where(Notification.user_id == user_id)).all()
+    if not notifications:
+        raise HTTPException(status_code=404, detail="No notifications found for this user")
+    return notifications
