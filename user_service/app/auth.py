@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from typing import Annotated
 from app.deps import get_session
 from fastapi import Depends, HTTPException, status
-from app.models.user_model import User,TokenData
+from app.models.user_model import User,TokenData,Role
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from datetime import datetime, timezone, timedelta
@@ -90,6 +90,19 @@ def current_user(token: Annotated[str, Depends(oauth_scheme)],
     user = get_user_from_db(session, username=token_data.username)
     if not user:
         raise credential_exception
-    return user
+    # Add access token to the returned user data
+    user_data = user.dict()
+    user_data['access_token'] = token
+
+    return user_data
+
+
+def admin_required(current_user: Annotated[User, Depends(current_user)]):
+    if current_user.role != Role.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user    
 
 

@@ -14,7 +14,7 @@ from app.deps import get_kafka_producer,get_session
 from app.models.payment_model import Payment,PaymentCreate,PaymentUpdate
 from app.crud.payment_crud import create_payment,get_payment,payment_status_update,get_payment_intent_status
 import stripe
-from app.shared_auth import get_current_user,get_login_for_access_token
+from app.shared_auth import get_current_user,get_login_for_access_token,admin_required
 from app.settings import STRIPE_API_KEY
  
 stripe.api_key = STRIPE_API_KEY
@@ -63,11 +63,11 @@ async def create_payment_endpoint(payment: PaymentCreate, session: Session = Dep
         return {"Payment":pay_data,"checkout_url": checkout_url}
     return {"payment": pay_data}
 
-@app.get("/payments/{payment_id}", response_model=Payment)
+@app.get("/payments/{payment_id}", response_model=Payment,dependencies=[Depends(get_current_user)])
 def read_payment(payment_id: int, session: Session = Depends(get_session), current_user: Any = Depends(get_current_user)):
     return get_payment(session, payment_id, current_user["id"])
 
-@app.patch("/payments/{payment_id}", response_model=Payment)
+@app.patch("/payments/{payment_id}", response_model=Payment,dependencies=[Depends(admin_required)])
 def update_payment(payment_id: int, payment_update: PaymentUpdate, session: Session = Depends(get_session),current_user: Any = Depends(get_current_user)):
     payment = get_payment(session, payment_id, current_user["id"])
     updated_payment = update_payment_status(session, payment_id, payment_update.status)

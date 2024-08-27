@@ -51,3 +51,17 @@ def admin_required(current_user: Annotated[Dict[str, Any], Depends(get_current_u
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
+
+def admin_user(current_user: Annotated[Dict[str, Any], Depends(get_current_user)]):
+    print("Current User Data:", current_user)  # Add this line
+    if not current_user:
+        raise HTTPException(status_code=403, detail="authentication required")
+    return current_user
+
+
+# @app.post("/create-order/")
+# async def order_generate(order:CreateOrder,user:GetCurrentUserDep, session: DBSessionDep, producer:ProducerDep):
+
+# @app.post("/auth/login")
+# def login(token:LoginForAccessTokenDep):
+#     return token

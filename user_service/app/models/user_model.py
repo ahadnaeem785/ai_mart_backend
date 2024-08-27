@@ -2,6 +2,14 @@ from sqlmodel import SQLModel,Field
 from typing import Optional,Annotated
 from pydantic import BaseModel
 from fastapi import Form
+from enum import Enum
+
+
+class Role(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+
+
 
 
 class User(SQLModel, table=True):
@@ -9,6 +17,7 @@ class User(SQLModel, table=True):
     username: str
     email: str
     password: str
+    role: Role = Field(default=Role.USER)
     # created_at: datetime = Field(default_factory=datetime.utcnow)
     # updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -16,6 +25,7 @@ class UserUpdate(SQLModel):
     username: Optional[str] = None
     email: Optional[str] = None
     password: Optional[str] = None
+    # role: Optional[Role] = None
 
 
 class Register_User (BaseModel):

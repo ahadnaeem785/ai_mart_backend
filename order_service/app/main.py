@@ -15,7 +15,7 @@ from app.crud.order_cruds import place_order,get_all_orders,get_order,delete_ord
 import requests
 from app.consumer.order_check_reponse import consume_order_response_messages
 from app.consumer.order_status_update import consume_payment_response_message
-from app.shared_auth import get_current_user,get_login_for_access_token
+from app.shared_auth import get_current_user,get_login_for_access_token,admin_required,oauth2_scheme
 
 GetCurrentUserDep = Annotated[ Any, Depends(get_current_user)]
 LoginForAccessTokenDep = Annotated[dict, Depends(get_login_for_access_token)]
@@ -27,7 +27,7 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables...")
+    print("Creating tables.......")
     #listens the order-check-response topic
     task = asyncio.create_task(consume_order_response_messages("order-check-response", settings.BOOTSTRAP_SERVER))
     asyncio.create_task(consume_payment_response_message("payment_succeeded", settings.BOOTSTRAP_SERVER))
@@ -53,12 +53,15 @@ def login(token:LoginForAccessTokenDep):
 
 @app.post("/orders/", response_model=Order)
 async def create_order(order: OrderCreate, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)], current_user: GetCurrentUserDep):
-    product_price = get_product_price(order.product_id)
+    print("Currrr",current_user)
+    product_price = get_product_price(order.product_id, token=current_user['access_token'])
+    # product_price = get_product_price(order.product_id)
     print("Product Price:", product_price)
     order_data = Order(**order.dict(exclude={"user_id"}), user_id=current_user["id"])
     new_order = send_order_to_kafka(session, order_data, product_price)
     # send order to kafka topic 
     order_dict = {field: getattr(order_data, field) for field in new_order.dict()}
+    # order_dict["token"] = current_user['access_token']
     order_json = json.dumps(order_dict).encode("utf-8")
     print("orderJSON:", order_json)
     await producer.send_and_wait(settings.KAFKA_ORDER_TOPIC, order_json)
@@ -78,21 +81,21 @@ async def create_order(order: OrderCreate, session: Annotated[Session, Depends(g
 
     return new_order
 
-@app.get("/orders/{order_id}", response_model=OrderRead)
-def read_order(order_id: int, session: Session = Depends(get_session), current_user: Any = Depends(get_current_user)):
-    return get_order(session, order_id, current_user["id"])
+# @app.get("/orders/{order_id}", response_model=OrderRead)
+# def read_order(order_id: int, session: Session = Depends(get_session), current_user: Any = Depends(get_current_user)):
+#     return get_order(session, order_id, current_user["id"])
 
 @app.get("/orders/", response_model=list[OrderRead])
-def list_orders(session: Session = Depends(get_session), current_user: Any = Depends(get_current_user)):
+def list_orders(session: Session = Depends(get_session), current_user: Any = Depends(admin_required)):
     return get_all_orders(session, current_user["id"])
 
 
 @app.delete("/orders/{order_id}")
-def delete_order_by_id(order_id: int, session: Annotated[Session, Depends(get_session)], current_user: Any = Depends(get_current_user)):
+def delete_order_by_id(order_id: int, session: Annotated[Session, Depends(get_session)], current_user: Any = Depends(admin_required)):
     return delete_order(session=session, order_id=order_id, user_id=current_user["id"])
         
 @app.patch("/orders/{order_id}", response_model=Order)
-def update_status(order_id: int, status: str, session: Annotated[Session, Depends(get_session)], current_user: GetCurrentUserDep):
+def update_status(order_id: int, status: str, session: Annotated[Session, Depends(get_session)], current_user: admin_required):
     order = update_order_status(session, order_id, current_user["id"], status)
     # # Create notification message
     # notification_message = {
@@ -109,3 +112,12 @@ def update_status(order_id: int, status: str, session: Annotated[Session, Depend
 
     return order
 
+
+@app.get("/my-orders/", response_model=list[Order])
+async def read_my_orders(current_user: dict = Depends(get_current_user), session: Session = Depends(get_session)):
+    """Retrieve all orders for the currently authenticated user"""
+    user_id = current_user['id']
+    orders = session.exec(select(Order).where(Order.user_id == user_id)).all()
+    if not orders:
+        raise HTTPException(status_code=404, detail="No orders found for this user")
+    return orders

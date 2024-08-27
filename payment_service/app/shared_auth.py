@@ -1,6 +1,6 @@
 from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
 from requests import get,post
-from typing import Annotated,Any
+from typing import Annotated,Any,Dict
 from fastapi import Depends, HTTPException, status
 
 
@@ -45,6 +45,11 @@ def get_login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, D
 LoginForAccessTokenDep = Annotated[dict, Depends(get_login_for_access_token)]
 
 
+def admin_required(current_user: Annotated[Dict[str, Any], Depends(get_current_user)]):
+    print("Current User Data:", current_user)  # Add this line
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return current_user
 
 
 

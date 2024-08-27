@@ -14,6 +14,7 @@ from app.deps import get_kafka_producer,get_session
 from app.models.product_model import Product,ProductUpdate
 from app.crud.product_crud import get_all_products,delete_product_by_id,update_product_by_id,get_product_by_id
 from app.consumer.product_consumer import consume_messages
+from app.shared_auth import get_current_user,admin_required,LoginForAccessTokenDep,admin_user
 
 
 def create_db_and_tables()->None:
@@ -22,7 +23,7 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables.......")
+    print("Creating tables.....")
     task = asyncio.create_task(consume_messages(settings.KAFKA_ORDER_TOPIC, settings.BOOTSTRAP_SERVER))
     create_db_and_tables()
     yield
@@ -44,8 +45,11 @@ app = FastAPI(lifespan=lifespan, title="Product API with DB",
 def read_root():
     return {"Product": "Service"}
 
+@app.post("/auth/login")
+def login(token:LoginForAccessTokenDep):
+    return token
 
-@app.post("/products/", response_model=Product)
+@app.post("/products/", response_model=Product,dependencies=[Depends(admin_required)])
 async def create_new_product(product: Product, session: Annotated[Session, Depends(get_session)],producer:Annotated[AIOKafkaProducer,Depends(get_kafka_producer)]):
     product_dict = {field: getattr(product, field) for field in product.dict()}
     product_json = json.dumps(product_dict).encode("utf-8")
@@ -55,12 +59,12 @@ async def create_new_product(product: Product, session: Annotated[Session, Depen
     # new_product = add_new_product(product,session)
     return product
 
-@app.get("/products/", response_model=list[Product])
+@app.get("/products/", response_model=list[Product],dependencies=[Depends(get_current_user)])
 def read_products(session: Annotated[Session, Depends(get_session)]):
     """ Get all products from the database"""
     return get_all_products(session)
 
-@app.get("/products/{product_id}", response_model=Product)
+@app.get("/products/{product_id}", response_model=Product,dependencies=[Depends(admin_user)])
 def read_single_product(product_id: int, session: Annotated[Session, Depends(get_session)]):
     """Read a single product"""
     try:
@@ -69,7 +73,7 @@ def read_single_product(product_id: int, session: Annotated[Session, Depends(get
         raise e
 
 
-@app.delete("/products/{product_id}")
+@app.delete("/products/{product_id}",dependencies=[Depends(admin_required)])
 def delete_products(product_id:int , session: Annotated[Session, Depends(get_session)]):
     """ Delete a single product by ID"""
     try:
@@ -80,7 +84,7 @@ def delete_products(product_id:int , session: Annotated[Session, Depends(get_ses
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.patch("/products/{product_id}", response_model=Product)
+@app.patch("/products/{product_id}", response_model=Product,dependencies=[Depends(admin_required)])
 def update_single_product(product_id: int, product: ProductUpdate, session: Annotated[Session, Depends(get_session)]):
     """ Update a single product by ID"""
     try:

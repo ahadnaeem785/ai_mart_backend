@@ -3,7 +3,7 @@ from datetime import timedelta
 from contextlib import asynccontextmanager
 from typing import Union, Optional, Annotated
 from sqlmodel import Field, Session, SQLModel, select, Sequence
-from fastapi import FastAPI, Depends,HTTPException
+from fastapi import FastAPI, Depends,HTTPException,status
 from typing import AsyncGenerator
 from aiokafka import AIOKafkaConsumer,AIOKafkaProducer
 import asyncio
@@ -11,10 +11,11 @@ import json
 from app import settings
 from app.db_engine import engine
 from app.deps import get_kafka_producer,get_session
-from app.models.user_model import User,UserUpdate,Register_User,Token,TokenData
+from app.models.user_model import User,UserUpdate,Register_User,Token,TokenData,Role
 from app.crud.user_crud import add_new_user,get_user_by_id,get_all_users,delete_user_by_id,update_user_by_id
-from app.auth import get_user_from_db ,hash_password,authenticate_user,EXPIRY_TIME,create_access_token,current_user
+from app.auth import get_user_from_db ,hash_password,authenticate_user,EXPIRY_TIME,create_access_token,current_user,admin_required
 from fastapi.security import OAuth2PasswordRequestForm
+from app.crud.admin import create_initial_admin
 
 def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
@@ -23,6 +24,7 @@ def create_db_and_tables()->None:
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
     print("Creating tables.....")
     create_db_and_tables()
+    create_initial_admin()  # Create the initial admin during startup
     yield
 
 
@@ -35,13 +37,23 @@ app = FastAPI(lifespan=lifespan, title="User API with DB",
 def read_root():
     return {"User": "Service"}
 
+@app.get("/test")
+def test(current_user: Annotated[User, Depends(current_user)]):
+    if current_user.role != "USER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users are not allowed to access this route."
+        )
+    return {"User": "Service"}
+
 
 @app.get("/users/", response_model=list[User])
-def read_users(session: Annotated[Session, Depends(get_session)]):
-    """ Get all users from the database"""
-    return get_all_users(session)
+def read_users(current_user: Annotated[User, Depends(admin_required)], session: Annotated[Session, Depends(get_session)]):
+    """ Get all users from the database except the admin's own information """
+    return get_all_users(session, admin_user_id=current_user.id)
 
-@app.get("/users/{user_id}", response_model=User)
+
+@app.get("/users/{user_id}", response_model=User,dependencies=[Depends(admin_required)])
 def read_single_user(user_id: int, session: Annotated[Session, Depends(get_session)]):
     """Read a single user"""
     try:
@@ -49,7 +61,7 @@ def read_single_user(user_id: int, session: Annotated[Session, Depends(get_sessi
     except HTTPException as e:
         raise e
 
-@app.delete("/users/{user_id}")
+@app.delete("/users/{user_id}",dependencies=[Depends(admin_required)])
 def delete_user(user_id: int, session: Annotated[Session, Depends(get_session)]):
     """ Delete a single user by ID"""
     try:
@@ -58,8 +70,14 @@ def delete_user(user_id: int, session: Annotated[Session, Depends(get_session)])
         raise e
 
 @app.patch("/users/{user_id}", response_model=UserUpdate)
-async def update_single_user(user_id: int, user: UserUpdate, session: Annotated[Session, Depends(get_session)],producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
+async def update_single_user(user_id: int, user: UserUpdate, session: Annotated[Session, Depends(get_session)],producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)],current_user: Annotated[User, Depends(current_user)]):
     """ Update a single user by ID"""
+
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=403, detail="You can only update your own account."
+        )
+
     try:
         user = update_user_by_id(user_id=user_id, to_update_user_data=user, session=session)
         print("User", user)
@@ -89,7 +107,10 @@ async def regiser_user(new_user:Annotated[Register_User, Depends()],
     user = User(
                 username = new_user.username,
                 email = new_user.email,
-                password = hash_password(new_user.password))
+                password = hash_password(new_user.password),
+                role = Role.USER
+                )
+                
 
     session.add(user)
     session.commit()

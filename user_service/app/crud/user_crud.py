@@ -13,8 +13,8 @@ def add_new_user(user_data: User, session: Session):
     return user_data
 
 # Get All Users from the Database
-def get_all_users(session: Session):
-    all_users = session.exec(select(User)).all()
+def get_all_users(session: Session, admin_user_id: int):
+    all_users = session.exec(select(User).where(User.id != admin_user_id)).all()
     return all_users
 
 # Get User by ID

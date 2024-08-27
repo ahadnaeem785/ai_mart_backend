@@ -16,6 +16,7 @@ from app.deps import get_session, get_kafka_producer
 from app.consumer.add_inventory import consume_messages
 from app.consumer.check_stock import consume_order_messages
 from app.consumer.update_stock import consume_order_paid_messages
+from app.shared_auth import get_current_user,admin_required,LoginForAccessTokenDep
 
 
 def create_db_and_tables() -> None:
@@ -26,7 +27,7 @@ def create_db_and_tables() -> None:
 # The first part of the function, before the yield, will
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    print("Creating table!!!!!!!")
+    print("Creating table!!!!!!")
     task = asyncio.create_task(consume_messages("product-events",settings.BOOTSTRAP_SERVER))
     
     asyncio.create_task(consume_order_messages(
@@ -55,6 +56,10 @@ app = FastAPI(
 def read_root():
     return {"Hello": "Inventory Service"}
 
+@app.post("/auth/login")
+def login(token:LoginForAccessTokenDep):
+    return token
+
 
 # @app.post("/manage-inventory/", response_model=InventoryItem)
 # async def create_new_inventory_item(item: InventoryItem, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
@@ -69,13 +74,13 @@ def read_root():
 #     return item
 
 
-@app.get("/manage-inventory/all", response_model=list[InventoryItem])
+@app.get("/manage-inventory/all", response_model=list[InventoryItem],dependencies=[Depends(admin_required)])
 def all_inventory_items(session: Annotated[Session, Depends(get_session)]):
     """ Get all inventory items from the database"""
     return get_all_inventory_items(session)
 
 
-@app.get("/manage-inventory/{item_id}", response_model=InventoryItem)
+@app.get("/manage-inventory/{item_id}", response_model=InventoryItem,dependencies=[Depends(admin_required)])
 def single_inventory_item(item_id: int, session: Annotated[Session, Depends(get_session)]):
     """ Get a single inventory item by ID"""
     try:
@@ -86,7 +91,7 @@ def single_inventory_item(item_id: int, session: Annotated[Session, Depends(get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/manage-inventory/{item_id}", response_model=dict)
+@app.delete("/manage-inventory/{item_id}", response_model=dict,dependencies=[Depends(admin_required)])
 def delete_single_inventory_item(item_id: int, session: Annotated[Session, Depends(get_session)]):
     """ Delete a single inventory item by ID"""
     try:
@@ -97,7 +102,7 @@ def delete_single_inventory_item(item_id: int, session: Annotated[Session, Depen
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.patch("/manage-inventory/{product_id}", response_model=InventoryItemUpdate)
+@app.patch("/manage-inventory/{product_id}", response_model=InventoryItemUpdate,dependencies=[Depends(admin_required)])
 def update_single_inventory_item(product_id: int, item: InventoryItemUpdate, session: Annotated[Session, Depends(get_session)]):
     """ Update a single inventory item by ID"""
     try:
