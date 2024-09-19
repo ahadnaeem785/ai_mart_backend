@@ -27,7 +27,7 @@ def create_db_and_tables()->None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
-    print("Creating tables.......")
+    print("Creating tables...")
     #listens the order-check-response topic
     task = asyncio.create_task(consume_order_response_messages("order-check-response", settings.BOOTSTRAP_SERVER))
     asyncio.create_task(consume_payment_response_message("payment_succeeded", settings.BOOTSTRAP_SERVER))
